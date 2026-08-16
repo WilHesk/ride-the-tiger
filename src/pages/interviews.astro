@@ -1,0 +1,17 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getCollection } from 'astro:content';
+import InterviewFilter from '../components/InterviewFilter';
+
+const allInterviews = await getCollection('interviews');
+const sortedInterviews = allInterviews.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+<Layout title="Interviews | Ride The Tiger">
+  <div class="container mx-auto px-6 max-w-5xl py-20 min-h-screen">
+    <header class="mb-16 border-b-4 border-tiger-500 pb-8 inline-block">
+      <h1 class="text-5xl font-bold tracking-tight mb-4 font-sans uppercase">The Interviews</h1>
+      <p class="text-2xl text-gray-500 font-serif italic">Unfiltered conversations on creative survival.</p>
+    </header>
+    <InterviewFilter client:load interviews={sortedInterviews.map(i => ({ slug: i.id, data: i.data }))} />
+  </div>
+</Layout>
