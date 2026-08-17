@@ -12,9 +12,18 @@ export async function getStaticPaths() {
 
 const { interview } = Astro.props;
 const { Content } = await render(interview);
+
+const imagePath = `/headshots/${interview.data.interviewee}.png`;
 ---
 
-<Layout title={`${interview.data.title} | Ride The Tiger`}>
+<Layout 
+  title={`${interview.data.title} | Ride The Tiger`}
+  description={interview.data.excerpt}
+  image={imagePath}
+  type="article"
+  keywords={interview.data.tags}
+  publishedTime={interview.data.date}
+>
   <article class="bg-white border-b-8 border-tiger-500">
     <header class="container mx-auto px-6 max-w-4xl py-20 lg:py-32">
       <div class="mb-8 flex flex-wrap gap-4 items-center">
@@ -24,9 +33,14 @@ const { Content } = await render(interview);
           </span>
         ))}
       </div>
-      <h1 class="text-5xl md:text-7xl font-black uppercase tracking-tighter mb-8 leading-[0.9]">
-        {interview.data.title}
-      </h1>
+      <div class="flex flex-col md:flex-row gap-8 items-start mb-8">
+        <h1 class="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.9] flex-1">
+          {interview.data.title}
+        </h1>
+        <div class="w-32 h-32 md:w-48 md:h-48 flex-shrink-0 bg-gray-200 border-4 border-tiger-500 overflow-hidden shadow-xl">
+          <img src={imagePath} alt={`Headshot of ${interview.data.interviewee}`} class="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" />
+        </div>
+      </div>
       
       <blockquote class="pull-quote text-2xl md:text-4xl max-w-3xl mb-12">
         "{interview.data.quote}"

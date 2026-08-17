@@ -1,7 +1,26 @@
 ---
 import '../styles/global.css';
 
-const { title = "Ride The Tiger", description = "An Editorial Series on Creative Survival" } = Astro.props;
+export interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: "website" | "article";
+  keywords?: string[];
+  publishedTime?: Date;
+}
+
+const { 
+  title = "Ride The Tiger", 
+  description = "An Editorial Series on Creative Survival",
+  image = "/favicon.svg",
+  type = "website",
+  keywords = ["creativity", "AI", "copywriting", "design", "agencies"],
+  publishedTime
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site || Astro.url.origin);
+const siteName = "Ride The Tiger";
 ---
 
 <html lang="en">
@@ -10,8 +29,27 @@ const { title = "Ride The Tiger", description = "An Editorial Series on Creative
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
+    
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta name="keywords" content={keywords.join(', ')} />
+    <link rel="canonical" href={canonicalURL} />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonicalURL} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(image, Astro.url.origin)} />
+    <meta property="og:site_name" content={siteName} />
+    {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content={canonicalURL} />
+    <meta property="twitter:title" content={title} />
+    <meta property="twitter:description" content={description} />
+    <meta property="twitter:image" content={new URL(image, Astro.url.origin)} />
   </head>
   <body class="min-h-screen flex flex-col">
     <header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-offwhite)]/80 border-b border-gray-200 py-6">
