@@ -2,9 +2,9 @@
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --color-tiger-500: #F59E0B;
-  --color-tiger-600: #D97706;
-  --color-charcoal: #121212;
+  --color-tiger-500: #f8a322;
+  --color-tiger-600: #8b3f00;
+  --color-charcoal: #232A36;
   --color-offwhite: #FAFAFA;
 
   --font-sans: "Inter", "Helvetica Neue", sans-serif;
