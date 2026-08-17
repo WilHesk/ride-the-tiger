@@ -61,8 +61,11 @@ export default function InterviewFilter({ interviews }: { interviews: Interview[
           <a
             key={interview.slug}
             href={`/interviews/${interview.slug}`}
-            className="group block bg-white border border-gray-200 hover:border-tiger-500 transition-colors flex flex-col h-full"
+            className="group block bg-white border border-gray-200 hover:border-tiger-500 transition-colors flex flex-col h-full overflow-hidden shadow-sm hover:shadow-xl"
           >
+            <div className="w-full h-48 md:h-56 bg-gray-200 border-b border-gray-200 overflow-hidden shrink-0">
+              <img src={`/headshots/${interview.data.interviewee}.png`} alt={interview.data.interviewee} className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500" />
+            </div>
             <div className="p-8 flex flex-col flex-grow">
               <div className="flex gap-2 mb-4 flex-wrap">
                 {interview.data.tags.map(tag => (
