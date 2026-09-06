@@ -40,7 +40,7 @@ const siteName = "Ride The Tiger";
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL(image, Astro.url.origin)} />
+    <meta property="og:image" content={new URL(image, Astro.site || Astro.url.origin)} />
     <meta property="og:site_name" content={siteName} />
     {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
 
@@ -49,7 +49,7 @@ const siteName = "Ride The Tiger";
     <meta property="twitter:url" content={canonicalURL} />
     <meta property="twitter:title" content={title} />
     <meta property="twitter:description" content={description} />
-    <meta property="twitter:image" content={new URL(image, Astro.url.origin)} />
+    <meta property="twitter:image" content={new URL(image, Astro.site || Astro.url.origin)} />
   </head>
   <body class="min-h-screen flex flex-col">
     <header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-offwhite)]/80 border-b border-gray-200 py-6">
