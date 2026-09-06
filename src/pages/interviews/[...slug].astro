@@ -14,11 +14,14 @@ const { interview } = Astro.props;
 const { Content } = await render(interview);
 
 const imagePath = `/headshots/${interview.data.interviewee}.png`;
+
+let rawDesc = interview.data.excerpt || interview.data.quote || "";
+let seoDescription = rawDesc.length > 155 ? rawDesc.substring(0, 152) + '...' : rawDesc;
 ---
 
 <Layout 
   title={`${interview.data.title} | Ride The Tiger`}
-  description={interview.data.excerpt}
+  description={seoDescription}
   image={imagePath}
   type="article"
   keywords={interview.data.tags}
