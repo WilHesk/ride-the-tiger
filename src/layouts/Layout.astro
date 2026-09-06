@@ -8,6 +8,7 @@ export interface Props {
   type?: "website" | "article";
   keywords?: string[];
   publishedTime?: Date;
+  schema?: any;
 }
 
 const { 
@@ -16,7 +17,8 @@ const {
   image = "/favicon.svg",
   type = "website",
   keywords = ["creativity", "AI", "copywriting", "design", "agencies"],
-  publishedTime
+  publishedTime,
+  schema
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site || Astro.url.origin);
@@ -50,6 +52,8 @@ const siteName = "Ride The Tiger";
     <meta property="twitter:title" content={title} />
     <meta property="twitter:description" content={description} />
     <meta property="twitter:image" content={new URL(image, Astro.site || Astro.url.origin)} />
+    
+    {schema && <script type="application/ld+json" set:html={JSON.stringify(schema)} />}
   </head>
   <body class="min-h-screen flex flex-col">
     <header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-offwhite)]/80 border-b border-gray-200 py-6">

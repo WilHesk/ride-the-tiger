@@ -1,8 +1,25 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const schema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "Ride The Tiger",
+      "url": (Astro.site || Astro.url.origin).toString()
+    },
+    {
+      "@type": "Organization",
+      "name": "Ride The Tiger",
+      "url": (Astro.site || Astro.url.origin).toString(),
+      "logo": new URL("/favicon.svg", Astro.site || Astro.url.origin).toString()
+    }
+  ]
+};
 ---
 
-<Layout title="Ride The Tiger | Editorial Series on Creative Survival">
+<Layout title="Ride The Tiger | Editorial Series on Creative Survival" schema={schema}>
   <!-- Hero Section -->
   <section class="container mx-auto px-6 max-w-5xl py-20 lg:py-32">
     <div class="mb-4 inline-block bg-charcoal text-tiger-500 font-bold uppercase tracking-widest text-xs px-3 py-1">
