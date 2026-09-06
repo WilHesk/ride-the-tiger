@@ -15,6 +15,12 @@ const { Content } = await render(interview);
 
 const imagePath = `/headshots/${interview.data.interviewee}.png`;
 
+const allInterviews = await getCollection('interviews');
+const relatedInterviews = allInterviews
+  .filter(i => i.id !== interview.id && i.data.tags.some(t => interview.data.tags.includes(t)))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf())
+  .slice(0, 3);
+
 let rawDesc = interview.data.excerpt || interview.data.quote || "";
 let seoDescription = rawDesc.length > 155 ? rawDesc.substring(0, 152) + '...' : rawDesc;
 
@@ -134,5 +140,26 @@ const schema = {
         </div>
       </div>
     </div>
+    
+    {relatedInterviews.length > 0 && (
+      <div class="bg-gray-100 py-20">
+        <div class="container mx-auto px-6 max-w-4xl">
+          <h3 class="text-3xl font-bold uppercase tracking-tight mb-10">Related Interviews</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {relatedInterviews.map(related => (
+              <a href={`/interviews/${related.id}`} class="block group">
+                <div class="bg-white p-6 shadow-md border-b-4 border-transparent group-hover:border-tiger-500 transition-colors h-full flex flex-col">
+                  <div class="mb-4">
+                    <img src={`/headshots/${related.data.interviewee}.png`} alt={related.data.interviewee} class="w-16 h-16 rounded-full object-cover mb-4" />
+                    <h4 class="font-bold text-lg leading-tight uppercase group-hover:text-tiger-600 transition-colors">{related.data.title}</h4>
+                  </div>
+                  <p class="text-gray-600 text-sm mt-auto">Featuring {related.data.interviewee}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
   </article>
 </Layout>
