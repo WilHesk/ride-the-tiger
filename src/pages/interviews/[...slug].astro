@@ -13,7 +13,7 @@ export async function getStaticPaths() {
 const { interview } = Astro.props;
 const { Content } = await render(interview);
 
-const imagePath = `/headshots/${interview.data.interviewee}.png`;
+const imagePath = `/headshots/${interview.data.interviewee}.webp`;
 
 const allInterviews = await getCollection('interviews');
 const relatedInterviews = allInterviews
@@ -95,7 +95,7 @@ const schema = {
         {interview.data.title}
       </h1>
       <div class="w-full bg-gray-200 border-b-8 border-tiger-500 overflow-hidden shadow-2xl mb-12" style="aspect-ratio: 1200/628">
-        <img src={imagePath} alt={`Cover image for ${interview.data.interviewee}`} class="w-full h-full object-cover hover:scale-105 hover:brightness-110 transition-all duration-700" />
+        <img src={imagePath} alt={`Cover image for ${interview.data.interviewee}`} class="w-full h-full object-cover hover:scale-105 hover:brightness-110 transition-all duration-700" width="1200" height="628" fetchpriority="high" />
       </div>
       
       <blockquote class="pull-quote text-2xl md:text-4xl max-w-3xl mb-12">
@@ -150,7 +150,7 @@ const schema = {
               <a href={`/interviews/${related.id}`} class="block group">
                 <div class="bg-white p-6 shadow-md border-b-4 border-transparent group-hover:border-tiger-500 transition-colors h-full flex flex-col">
                   <div class="mb-4">
-                    <img src={`/headshots/${related.data.interviewee}.png`} alt={related.data.interviewee} class="w-16 h-16 rounded-full object-cover mb-4" />
+                    <img src={`/headshots/${related.data.interviewee}.webp`} alt={related.data.interviewee} class="w-16 h-16 rounded-full object-cover mb-4" loading="lazy" width="64" height="64" />
                     <h4 class="font-bold text-lg leading-tight uppercase group-hover:text-tiger-600 transition-colors">{related.data.title}</h4>
                   </div>
                   <p class="text-gray-600 text-sm mt-auto">Featuring {related.data.interviewee}</p>
