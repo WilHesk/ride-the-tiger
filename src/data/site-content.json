@@ -1,0 +1,104 @@
+{
+  "global": {
+    "siteTitle": "Ride The Tiger",
+    "navInterviewsLabel": "Interviews",
+    "navAboutLabel": "About",
+    "footerHeading": "Stay on top of the shift.",
+    "footerBody": "New peer interviews, candid teardowns, and creative survival strategies delivered straight to your inbox every fortnight.",
+    "footerButtonLabel": "Subscribe",
+    "footerTagline": "Ride The Tiger. Documenting human creativity in the age of algorithms.",
+    "copyrightName": "Ride The Tiger",
+    "authorName": "William Hesketh"
+  },
+  "home": {
+    "badge": "An Editorial Series on Creative Survival",
+    "heroHeadingLine1": "Stop fighting the machine.",
+    "heroHeadingHighlight": "Learn to ride the tiger.",
+    "heroSub": "Candid, unfiltered conversations with copywriters, designers, and agency leaders navigating the real impact of AI on craft, commerce, and the creative psyche.",
+    "primaryCtaLabel": "Read the Interviews",
+    "secondaryCtaLabel": "About the Project",
+    "pullQuote": "\"The creative industry is stuck in a dead-end debate between doom-mongering Luddites and breathless tech evangelists. We document what's actually happening in the messy middle.\"",
+    "themesHeading": "The Four Questions We Ask Everyone",
+    "themes": [
+      {
+        "title": "1. The Bleed",
+        "subtitle": "(Where AI Kills)",
+        "description": "The lost billable hours, commoditized skills, and creative compromises no one wants to admit out loud."
+      },
+      {
+        "title": "2. The Leverage",
+        "subtitle": "(Where AI Empowers)",
+        "description": "The tactical workflows, secret speed runs, and superpower tools making creatives faster and bolder."
+      },
+      {
+        "title": "3. The Horizon",
+        "subtitle": "(Where Craft Goes Next)",
+        "description": "Honest, hype-free projections on how brand storytelling, design, and commercial creative work are shifting."
+      },
+      {
+        "title": "4. The Psyche",
+        "subtitle": "(How It Feels)",
+        "description": "Beyond the bottom line—tackling burnout, identity crises, and rediscovering joy in human expression."
+      }
+    ],
+    "bottomCtaLabel": "Read the Interviews"
+  },
+  "interviewsPage": {
+    "heading": "The Interviews",
+    "subheading": "Unfiltered conversations on creative survival."
+  },
+  "about": {
+    "heading": "About Ride The Tiger",
+    "subheading": "Unvarnished peer reality for the AI creative transition.",
+    "introHeading": "What is Ride The Tiger?",
+    "introPara1": "Ride The Tiger is an independent interview publication documenting how artificial intelligence is reshaping the creative landscape. Through long-form, peer-to-peer dialogues with agency directors, independent copywriters, art directors, and creative strategists, we capture the ground truth of working with—and against—emerging generative tools.",
+    "introPara2": "The name comes from the ancient paradox: once you are on the tiger’s back, you cannot simply jump off without getting mauled. AI isn’t going away, but blindly worshipping it is equally foolish. You have to learn to steer it.",
+    "whoHeading": "Who It’s For",
+    "whoItems": [
+      {
+        "bold": "Freelance Creatives & Solo Operators:",
+        "text": "Looking for pragmatic workflows and pricing strategies that keep them indispensable."
+      },
+      {
+        "bold": "Agency Leaders & Design Directors:",
+        "text": "Deciding how to integrate automated pipelines without losing house style, creative prestige, or team morale."
+      },
+      {
+        "bold": "In-House Marketers & Brand Strategists:",
+        "text": "Looking past Silicon Valley hype to see how real practitioners make creative work perform."
+      }
+    ],
+    "whyHeading": "Why You Should Read It",
+    "whyItems": [
+      {
+        "bold": "No Generic Prompts:",
+        "text": "We don't publish \"Top 10 Midjourney Hacks\" or regurgitated PR fluff."
+      },
+      {
+        "bold": "Uncensored Honesty:",
+        "text": "Our guests share real client reactions, billable drop-offs, internal anxieties, and workflow secrets."
+      },
+      {
+        "bold": "Balanced Candor:",
+        "text": "We celebrate genuine breakthroughs while calling out soulless slop."
+      }
+    ],
+    "ctaLabel": "Read the Interviews"
+  },
+  "seo": {
+    "siteName": "Ride The Tiger",
+    "homeTitle": "Ride The Tiger | Editorial Series on Creative Survival",
+    "homeDescription": "Candid, unfiltered conversations with copywriters, designers, and agency leaders navigating the real impact of AI on craft, commerce, and the creative psyche.",
+    "interviewsTitle": "Interviews | Ride The Tiger",
+    "interviewsDescription": "Unfiltered long-form peer interviews with copywriters, agency founders, and creative leaders adapting to AI.",
+    "aboutTitle": "About | Ride The Tiger",
+    "aboutDescription": "Unvarnished peer reality for the AI creative transition. Learn why Ride The Tiger documents human creativity in the age of algorithms.",
+    "shareTitle": "Ride The Tiger — Creative Survival in the Age of AI",
+    "shareDescription": "Unfiltered conversations with copywriters, agency owners, and creative professionals navigating AI and platform algorithms.",
+    "shareImage": "/headshots/Joe Emery.webp",
+    "shareImageAlt": "Ride The Tiger — An Editorial Series on Creative Survival",
+    "keywords": "creativity, AI, copywriting, design, agencies, LinkedIn algorithm, creative survival, Ride The Tiger",
+    "aeoSummary": "Documenting human creativity in the age of algorithms. An editorial interview series on creative survival — unfiltered conversations with copywriters, agency owners, and creative professionals navigating AI, platform algorithms, and the future of creative work.",
+    "aeoDetail": "Ride The Tiger publishes long-form peer interviews (5–8 min reads) with working creatives — copywriters, agency founders, freelancers — discussing how they're adapting their careers, craft, and business strategy in response to AI and algorithmic platforms like LinkedIn."
+  }
+}

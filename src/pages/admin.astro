@@ -1,0 +1,2558 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { getCollection } from "astro:content";
+import siteContent from "../data/site-content.json";
+import adminAccounts from "../data/admin-accounts.json";
+import { resolveInterviewImage } from "../utils/articleRenderer";
+
+const allInterviews = await getCollection("interviews");
+const sortedInterviews = allInterviews.sort((a, b) => {
+  if (typeof a.data.order === "number" && typeof b.data.order === "number") {
+    return a.data.order - b.data.order;
+  }
+  return b.data.date.valueOf() - a.data.date.valueOf();
+});
+
+const initialInterviewsData = sortedInterviews.map((entry, idx) => ({
+  slug: entry.id,
+  title: entry.data.title,
+  interviewee: entry.data.interviewee,
+  role: entry.data.role,
+  company: entry.data.company,
+  date: entry.data.date.toISOString().split("T")[0],
+  readTime: entry.data.readTime,
+  excerpt: entry.data.excerpt,
+  quote: entry.data.quote,
+  tags: entry.data.tags || [],
+  order: entry.data.order ?? idx + 1,
+  coverImage: resolveInterviewImage(entry.data),
+  coverImageAlt:
+    entry.data.coverImageAlt || `Cover image for ${entry.data.interviewee}`,
+  inlineImages: Array.isArray(entry.data.inlineImages)
+    ? entry.data.inlineImages
+    : [],
+  googleDriveFolderUrl: entry.data.googleDriveFolderUrl || "",
+  body: (entry.body || "").trim(),
+}));
+
+const imageChoices = [
+  { label: "Joe Emery (Headshot)", src: "/headshots/Joe Emery.webp" },
+  { label: "Martin Sayers (Headshot)", src: "/headshots/Martin Sayers.webp" },
+  {
+    label: "Cecilie Conradsen (Headshot)",
+    src: "/headshots/Cecilie Conradsen.webp",
+  },
+  { label: "Romey Norton (Headshot)", src: "/headshots/Romey Norton.webp" },
+  {
+    label: "Daniel Schmergel (Headshot)",
+    src: "/headshots/Daniel Schmergel.png",
+  },
+  { label: "Helen Carrie (Headshot)", src: "/headshots/Helen Carrie.png" },
+  { label: "Steph Spector (Headshot)", src: "/headshots/Steph Spector.png" },
+];
+---
+
+<Layout
+  title="Contributor Studio & Admin | Ride The Tiger"
+  description="Import interviews from a Google Docs folder, position inline images by percentage, and edit all posts and site copy in the browser."
+>
+  <script
+    is:inline
+    src="https://identity.netlify.com/v1/netlify-identity-widget.js"
+  ></script>
+
+  <!-- Studio Header Banner -->
+  <section class="bg-charcoal text-offwhite py-12 border-b-4 border-tiger-500">
+    <div class="container mx-auto px-6 max-w-6xl flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+      <div>
+        <div class="mb-2 inline-block bg-tiger-500 text-charcoal font-bold uppercase tracking-widest text-xs px-3 py-1">
+          Browser CMS &amp; Google Docs Folder Importer
+        </div>
+        <h1 class="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-offwhite">
+          Ride The Tiger Studio
+        </h1>
+        <p class="text-gray-300 text-base sm:text-lg mt-2 max-w-2xl">
+          Paste a Google Docs folder link to auto-create interview posts with percentage-positioned inline images, or edit every post and page across the site.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-5 text-xs font-bold uppercase tracking-wider">
+        <a href="/" class="text-offwhite hover:text-tiger-500 transition-colors">View Home &rarr;</a>
+        <a href="/interviews" class="text-offwhite hover:text-tiger-500 transition-colors">View /interviews &rarr;</a>
+        <a href="/about" class="text-offwhite hover:text-tiger-500 transition-colors">View /about &rarr;</a>
+        <button
+          type="button"
+          id="admin-logout-btn"
+          hidden
+          class="bg-transparent border border-tiger-500 text-tiger-500 hover:bg-tiger-500 hover:text-charcoal px-3 py-1.5 uppercase tracking-wider text-xs font-bold cursor-pointer transition-colors"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-12 md:py-16">
+    <div class="container mx-auto px-6 max-w-6xl">
+      <!-- =====================================================
+           1. OWNER AUTHENTICATION GATE (wilhesk@gmail.com)
+           ===================================================== -->
+      <div
+        id="admin-login-panel"
+        class="max-w-lg mx-auto p-8 sm:p-10 bg-white border-2 border-charcoal shadow-xl space-y-6"
+      >
+        <div class="p-5 bg-gray-100 border border-gray-300 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-black uppercase tracking-tight text-charcoal m-0">
+                Sign in with Netlify
+              </h2>
+              <p class="text-xs text-gray-600 m-0 mt-0.5">
+                Linked to owner account <strong class="text-charcoal">wilhesk@gmail.com</strong>
+              </p>
+            </div>
+            <button
+              type="button"
+              id="netlify-login-btn"
+              class="bg-charcoal hover:bg-tiger-600 text-offwhite font-bold px-4 py-2 text-xs uppercase tracking-wider cursor-pointer transition-colors"
+            >
+              Log in with Netlify &rarr;
+            </button>
+          </div>
+          <p id="netlify-auth-status" role="status" class="text-xs font-bold text-tiger-600 m-0"></p>
+
+          <div id="netlify-pat-drawer" hidden class="pt-3 border-t border-gray-300 space-y-3">
+            <p class="text-xs text-gray-700 m-0">
+              Paste a <a href="https://app.netlify.com/user/applications#personal-access-tokens" target="_blank" rel="noopener noreferrer" class="text-tiger-600 underline font-bold">Netlify Personal Access Token ↗</a> to verify your Netlify account directly:
+            </p>
+            <form id="netlify-token-form" class="space-y-2">
+              <input
+                id="netlify-pat-input"
+                type="password"
+                required
+                placeholder="nfp_••••••••••••••••••••••••"
+                class="w-full px-3 py-2 border border-gray-400 bg-white text-charcoal text-sm"
+              />
+              <button
+                type="submit"
+                class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-4 py-2 text-xs uppercase tracking-wider cursor-pointer"
+              >
+                Verify Netlify Token &amp; Enter Studio
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- VIEW A: SIGN IN -->
+        <div id="auth-view-signin">
+          <h3 class="text-2xl font-black uppercase tracking-tight text-charcoal mb-1">
+            Or sign in with Password
+          </h3>
+          <p class="text-sm text-gray-600 mb-5">
+            Owner sign-in for <strong class="text-charcoal">wilhesk@gmail.com</strong> (works with Google Password Manager).
+          </p>
+
+          <form id="admin-login-form" method="POST" action="/admin" class="space-y-5">
+            <div>
+              <label for="email" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                Owner Email Address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value="wilhesk@gmail.com"
+                autocomplete="username"
+                class="w-full px-4 py-2.5 border border-gray-400 bg-gray-50 text-charcoal"
+              />
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <label for="current-password" class="block text-xs font-bold uppercase tracking-wider text-charcoal">
+                  Password
+                </label>
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    id="toggle-login-password"
+                    class="text-xs font-bold text-gray-600 hover:text-charcoal bg-transparent border-0 p-0 cursor-pointer underline"
+                  >
+                    Show password
+                  </button>
+                  <button
+                    type="button"
+                    id="open-forgot-password-btn"
+                    class="text-xs font-bold text-tiger-600 hover:text-tiger-500 bg-transparent border-0 p-0 cursor-pointer underline"
+                  >
+                    Set / Reset password
+                  </button>
+                </div>
+              </div>
+              <input
+                id="current-password"
+                name="password"
+                type="password"
+                required
+                autocomplete="current-password"
+                placeholder="••••••••••••"
+                class="w-full px-4 py-2.5 border border-gray-400 bg-gray-50 text-charcoal"
+              />
+            </div>
+
+            <p id="login-error-msg" role="alert" class="text-sm font-bold text-tiger-600 m-0 min-h-[1.25rem]"></p>
+
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200">
+              <button
+                type="submit"
+                class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-6 py-3 uppercase tracking-wider text-sm cursor-pointer transition-colors"
+              >
+                Sign in to Studio &rarr;
+              </button>
+              <button
+                type="button"
+                id="open-signup-view-btn"
+                class="text-xs font-bold text-gray-600 hover:text-charcoal underline bg-transparent border-0 p-0 cursor-pointer"
+              >
+                First time? Choose password
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- VIEW B: CHOOSE / RESET PASSWORD -->
+        <div id="auth-view-signup" hidden>
+          <h3 class="text-2xl font-black uppercase tracking-tight text-charcoal mb-1">
+            Choose Studio Password
+          </h3>
+          <p class="text-sm text-gray-600 mb-5">
+            Choose a password (at least 8 characters) for <strong class="text-charcoal">wilhesk@gmail.com</strong>.
+          </p>
+
+          <form id="admin-signup-form" method="POST" action="/admin" class="space-y-5">
+            <div>
+              <label for="signup-email" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                Owner Email
+              </label>
+              <input
+                id="signup-email"
+                name="email"
+                type="email"
+                readonly
+                value="wilhesk@gmail.com"
+                autocomplete="username"
+                class="w-full px-4 py-2.5 border border-gray-300 bg-gray-200 text-charcoal"
+              />
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <label for="new-password" class="block text-xs font-bold uppercase tracking-wider text-charcoal">
+                  New Password
+                </label>
+                <button
+                  type="button"
+                  id="toggle-signup-password"
+                  class="text-xs font-bold text-gray-600 underline bg-transparent border-0 p-0 cursor-pointer"
+                >
+                  Show password
+                </button>
+              </div>
+              <input
+                id="new-password"
+                name="new-password"
+                type="password"
+                required
+                minlength="8"
+                autocomplete="new-password"
+                placeholder="Click here to choose or auto-generate password"
+                class="w-full px-4 py-2.5 border border-gray-400 bg-gray-50 text-charcoal"
+              />
+            </div>
+
+            <p id="signup-error-msg" role="alert" class="text-sm font-bold text-tiger-600 m-0 min-h-[1.25rem]"></p>
+
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200">
+              <button
+                type="submit"
+                class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-6 py-3 uppercase tracking-wider text-sm cursor-pointer transition-colors"
+              >
+                Save Password &amp; Enter Studio &rarr;
+              </button>
+              <button
+                type="button"
+                id="back-to-signin-btn"
+                class="text-xs font-bold text-gray-600 underline bg-transparent border-0 p-0 cursor-pointer"
+              >
+                Back to sign in
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- =====================================================
+           2. AUTHENTICATED STUDIO WORKSPACE
+           ===================================================== -->
+      <div id="admin-studio-workspace" hidden class="space-y-8 pb-20">
+        <!-- Sticky Top Studio Bar -->
+        <div class="sticky top-[4.5rem] z-40 bg-white/95 backdrop-blur-md p-4 border-2 border-charcoal shadow-md flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Studio sections">
+            <button
+              type="button"
+              role="tab"
+              aria-selected="true"
+              data-studio-tab="gdrive"
+              class="studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-charcoal text-tiger-500 border-charcoal"
+            >
+              1. Google Docs Folder Import
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              data-studio-tab="interviews"
+              class="studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-white text-charcoal border-gray-300 hover:border-charcoal"
+            >
+              2. Create &amp; Edit Interviews (<span id="tab-interviews-count">{initialInterviewsData.length}</span>)
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              data-studio-tab="pages"
+              class="studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-white text-charcoal border-gray-300 hover:border-charcoal"
+            >
+              3. Whole-Site Text &amp; SEO
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected="false"
+              data-studio-tab="analytics"
+              class="studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-white text-charcoal border-gray-300 hover:border-charcoal"
+            >
+              4. Analytics &amp; Backups
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between lg:justify-end gap-4">
+            <p id="global-studio-toast" aria-live="polite" class="text-xs sm:text-sm font-bold text-tiger-600 m-0"></p>
+            <button
+              type="button"
+              id="sticky-studio-save-btn"
+              class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-5 py-2.5 text-xs sm:text-sm uppercase tracking-wider cursor-pointer transition-colors"
+            >
+              <span id="sticky-studio-save-label">Save Interview Post</span> &rarr;
+            </button>
+          </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 1: IMPORT FROM GOOGLE DOCS FOLDER (AUTO-CREATE POST)
+             ========================================================= -->
+        <div id="studio-panel-gdrive" class="space-y-8">
+          <div class="bg-white border-2 border-charcoal p-6 sm:p-10 shadow-sm space-y-6">
+            <div class="border-b-2 border-charcoal pb-4 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <span class="bg-charcoal text-tiger-500 text-xs font-bold uppercase tracking-widest px-2.5 py-1">
+                  Automated Post Builder
+                </span>
+                <h2 class="text-3xl font-black uppercase tracking-tight text-charcoal mt-2 mb-1">
+                  Create Blog Post from a Google Docs Folder Link
+                </h2>
+                <p class="text-gray-600 text-sm m-0 max-w-3xl">
+                  Paste the link to a shared Google Drive folder containing: <strong>(1)</strong> a Google Doc with the interview copy, <strong>(2)</strong> the main cover image (1200&times;628), and <strong>(3)</strong> any additional images to insert into the article. You’ll immediately be able to set the exact <strong>percentage (0%&ndash;100%)</strong> for where each image appears within the copy and edit anything before or after publishing.
+                </p>
+              </div>
+            </div>
+
+            <form id="gdrive-import-form" class="space-y-4">
+              <div>
+                <label for="gdrive-folder-url" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-2">
+                  Google Drive Folder URL (or Google Doc URL) *
+                </label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                  <input
+                    id="gdrive-folder-url"
+                    name="folderUrl"
+                    type="url"
+                    required
+                    placeholder="https://drive.google.com/drive/folders/1a2b3c4d5e... (ensure sharing is 'Anyone with the link')"
+                    class="flex-1 px-4 py-3.5 border-2 border-charcoal bg-gray-50 text-charcoal font-mono text-sm focus:outline-none focus:border-tiger-500"
+                  />
+                  <button
+                    type="submit"
+                    id="gdrive-fetch-btn"
+                    class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-black px-8 py-3.5 uppercase tracking-wider text-sm cursor-pointer transition-colors shrink-0"
+                  >
+                    Fetch Folder &amp; Build Post &rarr;
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 m-0">
+                  <strong>Tip:</strong> Name your main image with the interviewee’s name or <code class="bg-gray-100 px-1">main</code>/<code class="bg-gray-100 px-1">cover</code>. Any other images in the folder are automatically added as inline article images (you can even name them e.g. <code class="bg-gray-100 px-1">photo-35%.jpg</code> or set their percentage slider after importing!).
+                </p>
+              </div>
+            </form>
+
+            <div id="gdrive-import-status" role="status" class="p-4 bg-gray-100 border-l-4 border-tiger-500 text-sm font-bold text-charcoal" hidden></div>
+
+            <!-- Discovered Folder Contents Summary (shown right after fetching a Google Drive folder) -->
+            <div id="gdrive-discovered-summary" hidden class="p-6 bg-gray-50 border border-gray-300 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-xl font-black uppercase tracking-tight text-charcoal m-0">
+                    Folder Imported! Review &amp; Set Image Percentages Below
+                  </h3>
+                  <p id="gdrive-discovered-meta" class="text-xs text-gray-600 m-0 mt-1"></p>
+                </div>
+                <button
+                  type="button"
+                  id="gdrive-open-in-editor-btn"
+                  class="bg-charcoal hover:bg-tiger-600 text-offwhite font-bold px-5 py-2.5 text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Open in Full Interview Editor &amp; Publish &rarr;
+                </button>
+              </div>
+            </div>
+
+            <!-- Optional Direct Copy + Multi-Image Folder Dropper (Works even if a Google folder is private) -->
+            <details class="border border-gray-300 bg-gray-50 p-4">
+              <summary class="cursor-pointer text-xs font-bold uppercase tracking-wider text-charcoal">
+                Or paste Google Doc copy &amp; drop folder images directly from your computer
+              </summary>
+              <div class="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                <p class="text-xs text-gray-600 m-0">
+                  If your Google Doc isn’t link-shared yet, you can also paste the raw Google Doc text and select your main + inline images below to auto-build the blog post:
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label for="quick-build-interviewee" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Interviewee Name (optional — auto-detected from copy)
+                    </label>
+                    <input
+                      id="quick-build-interviewee"
+                      type="text"
+                      placeholder="e.g. Steph Spector"
+                      class="w-full px-3 py-2 border border-gray-400 bg-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label for="quick-build-images" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Select Main Image + Any Inline Images
+                    </label>
+                    <input
+                      id="quick-build-images"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      class="w-full text-xs text-charcoal file:mr-3 file:py-1.5 file:px-3 file:border file:border-charcoal file:bg-white file:text-xs file:font-bold file:cursor-pointer"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label for="quick-build-copy" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                    Paste Raw Copy from Google Docs
+                  </label>
+                  <textarea
+                    id="quick-build-copy"
+                    rows="6"
+                    placeholder="Paste the full interview copy here..."
+                    class="w-full px-3 py-2 border border-gray-400 bg-white text-sm font-sans"
+                  ></textarea>
+                </div>
+                <button
+                  type="button"
+                  id="quick-build-submit-btn"
+                  class="bg-charcoal hover:bg-tiger-600 text-offwhite font-bold px-6 py-2.5 text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Auto-Build Post &amp; Configure Image Percentages &rarr;
+                </button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 2: INTERVIEWS MANAGER & EDITOR (WITH % INLINE IMAGES)
+             ========================================================= -->
+        <div id="studio-panel-interviews" hidden class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left Column: Ordered Interviews List -->
+          <div class="lg:col-span-4 space-y-4">
+            <div class="bg-white border-2 border-charcoal p-5 space-y-4">
+              <div class="flex items-center justify-between gap-2 border-b border-gray-200 pb-3">
+                <div>
+                  <h2 class="text-xl font-black uppercase tracking-tight text-charcoal m-0">
+                    All Interviews
+                  </h2>
+                  <p class="text-xs text-gray-500 m-0">
+                    Click any post to edit, or use &uarr; / &darr; to reorder.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  id="btn-new-interview"
+                  class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-3 py-1.5 text-xs uppercase tracking-wider cursor-pointer shrink-0"
+                >
+                  + New Post
+                </button>
+              </div>
+
+              <ul
+                id="interviews-manager-list"
+                role="list"
+                class="space-y-3 list-none m-0 p-0"
+              ></ul>
+            </div>
+          </div>
+
+          <!-- Right Column: Full Interview Editor + Percentage Inline Image Placer -->
+          <div class="lg:col-span-8 space-y-8">
+            <div id="interview-editor-card" class="bg-white border-2 border-charcoal p-6 sm:p-8 shadow-sm space-y-6">
+              <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b-2 border-charcoal">
+                <div>
+                  <span id="interview-editor-mode-badge" class="bg-charcoal text-tiger-500 text-xs font-bold uppercase tracking-widest px-2.5 py-0.5">
+                    Editing Interview
+                  </span>
+                  <h2 id="interview-form-heading" class="text-2xl sm:text-3xl font-black uppercase tracking-tight text-charcoal mt-1 m-0">
+                    Edit Interview Post
+                  </h2>
+                </div>
+                <div class="flex items-center gap-3">
+                  <a
+                    id="interview-view-live-link"
+                    href="/interviews"
+                    target="_blank"
+                    class="text-xs font-bold uppercase tracking-wider text-tiger-600 hover:text-tiger-500 underline"
+                  >
+                    View Live Page ↗
+                  </a>
+                </div>
+              </div>
+
+              <form id="interview-editor-form" class="space-y-6">
+                <input type="hidden" id="int-original-slug" value="" />
+
+                <!-- Basic Metadata -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                  <div class="sm:col-span-8">
+                    <label for="int-title" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Article Headline (H1) *
+                    </label>
+                    <input
+                      id="int-title"
+                      type="text"
+                      required
+                      placeholder="e.g. The Human Touch is Our Greatest Strength"
+                      class="w-full px-3.5 py-2.5 border border-gray-400 bg-gray-50 text-charcoal font-bold"
+                    />
+                  </div>
+                  <div class="sm:col-span-4">
+                    <label for="int-slug" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      URL Slug *
+                    </label>
+                    <input
+                      id="int-slug"
+                      type="text"
+                      required
+                      placeholder="e.g. romey-norton"
+                      class="w-full px-3.5 py-2.5 border border-gray-400 bg-gray-50 text-charcoal font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label for="int-interviewee" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Interviewee Name *
+                    </label>
+                    <input
+                      id="int-interviewee"
+                      type="text"
+                      required
+                      placeholder="e.g. Romey Norton"
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                  <div>
+                    <label for="int-role" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Role / Job Title *
+                    </label>
+                    <input
+                      id="int-role"
+                      type="text"
+                      required
+                      placeholder="e.g. Senior Copywriter"
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                  <div>
+                    <label for="int-company" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Company / Agency *
+                    </label>
+                    <input
+                      id="int-company"
+                      type="text"
+                      required
+                      placeholder="e.g. Wordsmiths Unlimited"
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label for="int-date" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Publish Date *
+                    </label>
+                    <input
+                      id="int-date"
+                      type="date"
+                      required
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                  <div>
+                    <label for="int-readtime" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Read Time *
+                    </label>
+                    <input
+                      id="int-readtime"
+                      type="text"
+                      required
+                      placeholder="e.g. 6 min read"
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                  <div>
+                    <label for="int-tags" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Categories / Tags (comma-separated) *
+                    </label>
+                    <input
+                      id="int-tags"
+                      type="text"
+                      required
+                      placeholder="Copywriting, AI Ethics, LinkedIn"
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label for="int-gdrive-url" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                    Linked Google Docs Folder URL (optional — click “Re-sync Folder” to pull latest copy/images)
+                  </label>
+                  <div class="flex flex-col sm:flex-row gap-2">
+                    <input
+                      id="int-gdrive-url"
+                      type="url"
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      class="flex-1 px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal font-mono text-xs"
+                    />
+                    <button
+                      type="button"
+                      id="int-resync-gdrive-btn"
+                      class="bg-charcoal hover:bg-tiger-600 text-offwhite font-bold px-4 py-2 text-xs uppercase tracking-wider cursor-pointer shrink-0"
+                    >
+                      Re-sync from Google Folder
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label for="int-excerpt" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Card Excerpt &amp; SEO Description *
+                    </label>
+                    <textarea
+                      id="int-excerpt"
+                      rows="3"
+                      required
+                      placeholder="1–2 sentence summary shown on /interviews cards and Google search results..."
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal text-sm"
+                    ></textarea>
+                  </div>
+                  <div>
+                    <label for="int-quote" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Hero Pull Quote *
+                    </label>
+                    <textarea
+                      id="int-quote"
+                      rows="3"
+                      required
+                      placeholder="Standout quote displayed beneath the main image..."
+                      class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal text-sm font-serif italic"
+                    ></textarea>
+                  </div>
+                </div>
+
+                <!-- 1. MAIN HERO IMAGE (1200x628) -->
+                <div class="p-5 bg-gray-50 border border-gray-300 space-y-4">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <h3 class="text-base font-black uppercase tracking-tight text-charcoal m-0">
+                      1. Main Hero Image (Top of Interview &amp; Card Thumbnail)
+                    </h3>
+                    <span class="text-xs text-gray-500">1200&times;628 aspect ratio</span>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                    <div class="md:col-span-5">
+                      <div class="w-full bg-gray-200 border-b-4 border-tiger-500 overflow-hidden shadow-md" style="aspect-ratio: 1200/628">
+                        <img
+                          id="int-cover-preview"
+                          src="/headshots/Joe Emery.webp"
+                          alt="Main image preview"
+                          class="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                    <div class="md:col-span-7 space-y-3">
+                      <div>
+                        <label for="int-cover-upload" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                          Upload Main Image from Computer
+                        </label>
+                        <input
+                          id="int-cover-upload"
+                          type="file"
+                          accept="image/*"
+                          class="w-full text-xs text-charcoal file:mr-3 file:py-1.5 file:px-3 file:border file:border-charcoal file:bg-white file:text-xs file:font-bold file:cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label for="int-cover-select" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                          Or Select Existing Headshot / Photo
+                        </label>
+                        <select
+                          id="int-cover-select"
+                          class="w-full px-3 py-1.5 border border-gray-400 bg-white text-charcoal text-xs"
+                        >
+                          <option value="">— Choose existing headshot or photo —</option>
+                          {imageChoices.map((c) => (
+                            <option value={c.src}>{c.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label for="int-cover-input" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Main Image URL / Path *
+                          </label>
+                          <input
+                            id="int-cover-input"
+                            type="text"
+                            required
+                            class="w-full px-3 py-1.5 border border-gray-400 bg-white text-charcoal text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label for="int-cover-alt" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                            Main Image Alt Text *
+                          </label>
+                          <input
+                            id="int-cover-alt"
+                            type="text"
+                            required
+                            placeholder="Cover image for..."
+                            class="w-full px-3 py-1.5 border border-gray-400 bg-white text-charcoal text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. ARTICLE COPY EDITOR -->
+                <div class="space-y-2">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <label for="int-body" class="block text-sm font-black uppercase tracking-tight text-charcoal">
+                      2. Full Interview Copy (Markdown / Paragraphs) *
+                    </label>
+                    <span id="int-wordcount-badge" class="text-xs font-bold text-gray-500">
+                      0 words
+                    </span>
+                  </div>
+                  <p class="text-xs text-gray-500 m-0">
+                    Separate paragraphs with a blank line. Use <code class="bg-gray-100 px-1">### Subheading</code> for section headings and <code class="bg-gray-100 px-1">[link text](https://...)</code> for links.
+                  </p>
+                  <textarea
+                    id="int-body"
+                    rows="16"
+                    required
+                    placeholder="Write or paste the interview copy here..."
+                    class="w-full px-4 py-3 border-2 border-gray-300 focus:border-charcoal bg-white text-charcoal text-base leading-relaxed font-sans"
+                  ></textarea>
+                </div>
+
+                <!-- 3. INLINE ARTICLE IMAGES WITH PERCENTAGE PLACEMENT (0% - 100%) -->
+                <div class="p-5 bg-gray-50 border-2 border-charcoal space-y-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-300 pb-3">
+                    <div>
+                      <h3 class="text-lg font-black uppercase tracking-tight text-charcoal m-0">
+                        3. Inline Article Images &amp; Percentage Placement (0% &ndash; 100%)
+                      </h3>
+                      <p class="text-xs text-gray-600 m-0 mt-0.5">
+                        Add images to insert automatically inside the article copy. Set a <strong>percentage (0%&ndash;100%)</strong> on each image to dictate how far through the article it appears (e.g. <strong>25%</strong> = quarter of the way down, <strong>50%</strong> = halfway through, <strong>80%</strong> = near the end).
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <label
+                        for="int-inline-upload"
+                        class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-3.5 py-2 text-xs uppercase tracking-wider cursor-pointer transition-colors"
+                      >
+                        + Upload Inline Image(s)
+                      </label>
+                      <input
+                        id="int-inline-upload"
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        class="hidden"
+                      />
+                      <button
+                        type="button"
+                        id="int-add-empty-inline-btn"
+                        class="bg-white hover:bg-gray-100 text-charcoal border border-charcoal font-bold px-3 py-2 text-xs uppercase tracking-wider cursor-pointer"
+                      >
+                        + Add by URL / Existing
+                      </button>
+                    </div>
+                  </div>
+
+                  <div id="int-inline-images-list" class="space-y-4"></div>
+                </div>
+
+                <div class="pt-4 border-t-2 border-charcoal flex flex-wrap items-center justify-between gap-4">
+                  <button
+                    type="submit"
+                    class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-black px-8 py-4 uppercase tracking-wider text-sm cursor-pointer transition-colors shadow-md"
+                  >
+                    <span id="int-submit-label">Save &amp; Publish Interview Post</span> &rarr;
+                  </button>
+                  <p id="int-save-status" aria-live="polite" class="text-sm font-bold text-tiger-600 m-0"></p>
+                </div>
+              </form>
+            </div>
+
+            <!-- Live Article + Inline Images Preview -->
+            <div class="bg-white border-2 border-charcoal p-6 sm:p-8 space-y-4">
+              <div class="flex items-center justify-between border-b border-gray-200 pb-3">
+                <h3 class="text-lg font-black uppercase tracking-tight text-charcoal m-0">
+                  Live Article Preview (Showing Inline Images at Configured Percentages)
+                </h3>
+                <span class="text-xs text-gray-500 uppercase tracking-widest font-bold">Live Preview</span>
+              </div>
+              <div
+                id="int-live-body-preview"
+                class="prose prose-neutral max-w-none prose-h3:text-2xl prose-h3:font-bold prose-h3:uppercase max-h-[540px] overflow-y-auto p-4 bg-gray-50 border border-gray-200"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 3: WHOLE-SITE TEXT, PHOTOS & SEO/AEO EDITOR
+             ========================================================= -->
+        <div id="studio-panel-pages" hidden class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div class="lg:col-span-4 space-y-4">
+            <div class="bg-white border-2 border-charcoal p-5 space-y-3">
+              <h2 class="text-xl font-black uppercase tracking-tight text-charcoal m-0">
+                Select Page to Edit
+              </h2>
+              <p class="text-xs text-gray-600 m-0">
+                Edit headings, copy, themes, and SEO metadata across the entire website.
+              </p>
+
+              <ul id="site-page-selector" class="space-y-2 list-none m-0 p-0">
+                <li>
+                  <button
+                    type="button"
+                    data-page-section="home"
+                    class="page-sec-btn w-full text-left p-3.5 border-2 border-charcoal bg-charcoal text-tiger-500 font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+                  >
+                    <span>Home Page (/)</span>
+                    <span>Hero, Quote, 4 Themes</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    data-page-section="interviewsPage"
+                    class="page-sec-btn w-full text-left p-3.5 border border-gray-300 bg-white text-charcoal font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+                  >
+                    <span>Interviews Header (/interviews)</span>
+                    <span>Heading &amp; Intro</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    data-page-section="about"
+                    class="page-sec-btn w-full text-left p-3.5 border border-gray-300 bg-white text-charcoal font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+                  >
+                    <span>About Page (/about)</span>
+                    <span>Story, Who &amp; Why</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    data-page-section="seo"
+                    class="page-sec-btn w-full text-left p-3.5 border border-gray-300 bg-white text-charcoal font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+                  >
+                    <span>SEO, AEO &amp; Social Sharing</span>
+                    <span>Meta, OG &amp; llms.txt</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    data-page-section="global"
+                    class="page-sec-btn w-full text-left p-3.5 border border-gray-300 bg-white text-charcoal font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+                  >
+                    <span>Global Header &amp; Footer</span>
+                    <span>Nav &amp; Newsletter</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="lg:col-span-8">
+            <div class="bg-white border-2 border-charcoal p-6 sm:p-8 space-y-6">
+              <div class="flex flex-wrap items-center justify-between gap-4 border-b-2 border-charcoal pb-4">
+                <div>
+                  <h2 id="page-editor-title" class="text-2xl font-black uppercase tracking-tight text-charcoal m-0">
+                    Editing: Home Page (/)
+                  </h2>
+                  <p class="text-xs text-gray-600 m-0 mt-1">
+                    Modify any field below and click “Save Page Text &amp; SEO” to publish immediately.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  id="top-save-page-btn"
+                  class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-5 py-2 text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Save Page Text &amp; SEO &rarr;
+                </button>
+              </div>
+
+              <form id="whole-site-editor-form" class="space-y-6">
+                <div id="whole-site-fields-container" class="space-y-5"></div>
+
+                <div class="pt-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                  <button
+                    type="submit"
+                    class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-black px-8 py-3.5 uppercase tracking-wider text-sm cursor-pointer"
+                  >
+                    Save Page Text &amp; SEO &rarr;
+                  </button>
+                  <p id="page-save-status" aria-live="polite" class="text-sm font-bold text-tiger-600 m-0"></p>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 4: ANALYTICS, BACKUPS & CACHE RESET
+             ========================================================= -->
+        <div id="studio-panel-analytics" hidden class="space-y-8">
+          <div class="bg-white border-2 border-charcoal p-6 sm:p-8 space-y-6">
+            <div>
+              <h2 class="text-2xl font-black uppercase tracking-tight text-charcoal mb-1">
+                Live Website Activity &amp; Backups
+              </h2>
+              <p class="text-sm text-gray-600 m-0">
+                Built-in pageview tracking and one-click JSON backups of all your interviews and site content.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div class="p-5 bg-gray-50 border border-gray-300">
+                <p id="analytics-stat-pageviews" class="text-3xl font-black text-charcoal m-0">0</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-500 mt-1 mb-0">Recorded Pageviews</p>
+              </div>
+              <div class="p-5 bg-gray-50 border border-gray-300">
+                <p id="analytics-stat-interviews" class="text-3xl font-black text-tiger-600 m-0">{initialInterviewsData.length}</p>
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-500 mt-1 mb-0">Published Interviews</p>
+              </div>
+              <div class="p-5 bg-gray-50 border border-gray-300 flex flex-col justify-between">
+                <p class="text-xs font-bold uppercase tracking-wider text-charcoal m-0">Export Backups</p>
+                <div class="flex flex-wrap gap-2 mt-2">
+                  <button
+                    type="button"
+                    id="download-interviews-json-btn"
+                    class="bg-charcoal text-offwhite px-3 py-1.5 text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  >
+                    Download Interviews JSON
+                  </button>
+                  <button
+                    type="button"
+                    id="download-site-json-btn"
+                    class="border border-charcoal text-charcoal px-3 py-1.5 text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  >
+                    Download Site JSON
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="text-base font-black uppercase tracking-tight text-charcoal mb-2">
+                Top Visited Pages
+              </h3>
+              <div id="analytics-top-pages-container" class="text-sm text-charcoal">
+                <p class="text-gray-500 m-0">No pageviews recorded yet.</p>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-black uppercase tracking-tight text-charcoal m-0">
+                  Reset Local Browser Studio Cache
+                </h3>
+                <p class="text-xs text-gray-600 m-0">
+                  Clears browser localStorage draft state and reloads from the server/build state.
+                </p>
+              </div>
+              <button
+                type="button"
+                id="reset-browser-cms-cache"
+                class="border border-tiger-600 text-tiger-600 hover:bg-tiger-600 hover:text-white font-bold px-4 py-2 text-xs uppercase tracking-wider cursor-pointer transition-colors"
+              >
+                Reset Local Cache
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Initial Seed Payload -->
+  <script
+    id="initial-rtt-cms-seed"
+    type="application/json"
+    set:html={JSON.stringify({
+      interviews: initialInterviewsData,
+      siteContent,
+      imageChoices,
+      adminAccounts,
+    })}
+  />
+</Layout>
+
+<script>
+  import {
+    renderMarkdownWithInlineImages,
+    getPercentageInsertionPreview,
+    escapeHtml,
+    type InlineImageItem,
+  } from "../utils/articleRenderer";
+
+  function initRttAdminStudio() {
+    const seedEl = document.getElementById("initial-rtt-cms-seed");
+    if (!seedEl) return;
+
+    const seedData = JSON.parse(seedEl.textContent || "{}");
+    const INTERVIEWS_STORAGE_KEY = "rtt_cms_interviews_v1";
+    const SITE_CONTENT_KEY = "rtt_cms_site_content_v1";
+    const ACCOUNTS_STORAGE_KEY = "rtt_studio_accounts_v1";
+    const AUTH_KEY = "rtt_studio_auth_v1";
+    const OWNER_EMAIL = "wilhesk@gmail.com";
+    const OWNER_NAME = "Wil Hesketh";
+
+    const globalToast = document.getElementById("global-studio-toast");
+    function showToast(msg: string) {
+      if (globalToast) globalToast.textContent = msg;
+    }
+
+    function slugify(text: string): string {
+      return String(text || "")
+        .toLowerCase()
+        .trim()
+        .replace(/['’]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+
+    function loadInterviewsList(): any[] {
+      try {
+        const raw = localStorage.getItem(INTERVIEWS_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return structuredClone(seedData.interviews || []);
+    }
+
+    function loadSiteContent(): any {
+      try {
+        const raw = localStorage.getItem(SITE_CONTENT_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return structuredClone(seedData.siteContent || {});
+    }
+
+    let interviewsList: any[] = loadInterviewsList();
+    let currentSiteContent: any = loadSiteContent();
+    let activeInlineImages: InlineImageItem[] = [];
+
+    async function uploadFileToServer(file: File): Promise<string> {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("File read error"));
+        reader.readAsDataURL(file);
+      });
+
+      try {
+        const res = await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "upload-image",
+            filename: file.name,
+            dataUrl,
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.url) {
+            return json.url;
+          }
+        }
+      } catch {
+        // fallback to dataUrl
+      }
+      return dataUrl;
+    }
+
+    async function persistInterviewsList(list: any[], toastMessage?: string) {
+      interviewsList = list.map((item, idx) => ({
+        ...item,
+        order: idx + 1,
+      }));
+      localStorage.setItem(
+        INTERVIEWS_STORAGE_KEY,
+        JSON.stringify(interviewsList)
+      );
+
+      const countEl = document.getElementById("tab-interviews-count");
+      if (countEl) countEl.textContent = String(interviewsList.length);
+      const statEl = document.getElementById("analytics-stat-interviews");
+      if (statEl) statEl.textContent = String(interviewsList.length);
+
+      try {
+        await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync-interviews",
+            items: interviewsList,
+          }),
+        });
+      } catch {
+        // local storage fallback remains active
+      }
+
+      renderInterviewsManagerList();
+      if (toastMessage) showToast(toastMessage);
+    }
+
+    // =====================================================
+    // AUTHENTICATION LOGIC (Netlify + Password Manager)
+    // =====================================================
+    const loginPanel = document.getElementById("admin-login-panel");
+    const workspace = document.getElementById("admin-studio-workspace");
+    const logoutBtn = document.getElementById("admin-logout-btn");
+    const viewSignin = document.getElementById("auth-view-signin");
+    const viewSignup = document.getElementById("auth-view-signup");
+    const loginForm = document.getElementById("admin-login-form") as HTMLFormElement | null;
+    const signupForm = document.getElementById("admin-signup-form") as HTMLFormElement | null;
+    const loginErrorMsg = document.getElementById("login-error-msg");
+    const signupErrorMsg = document.getElementById("signup-error-msg");
+    const netlifyPatDrawer = document.getElementById("netlify-pat-drawer");
+    const netlifyAuthStatus = document.getElementById("netlify-auth-status");
+    const netlifyTokenForm = document.getElementById("netlify-token-form") as HTMLFormElement | null;
+
+    function bytesToHex(bytes: Uint8Array): string {
+      return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+
+    function generateSaltHex(byteLen = 16): string {
+      const arr = new Uint8Array(byteLen);
+      crypto.getRandomValues(arr);
+      return bytesToHex(arr);
+    }
+
+    async function sha256Hex(input: string): Promise<string> {
+      const encoded = new TextEncoder().encode(input);
+      const digest = await crypto.subtle.digest("SHA-256", encoded);
+      return bytesToHex(new Uint8Array(digest));
+    }
+
+    async function hashPasswordWithSalt(password: string, salt: string): Promise<string> {
+      return sha256Hex(`${salt}:${password}:ride-the-tiger-v1`);
+    }
+
+    function loadAdminAccounts(): any[] {
+      try {
+        const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {
+        // ignore
+      }
+      return Array.isArray(seedData.adminAccounts) ? seedData.adminAccounts : [];
+    }
+
+    async function saveAdminAccounts(accounts: any[]) {
+      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+      try {
+        await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync-admin-accounts",
+            accounts,
+          }),
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    function getAuthUser(): { name: string; email: string } | null {
+      try {
+        const raw = sessionStorage.getItem(AUTH_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function completeSignInSession(email: string, name: string) {
+      sessionStorage.setItem(
+        AUTH_KEY,
+        JSON.stringify({
+          name: name || OWNER_NAME,
+          email: email.toLowerCase().trim(),
+          time: Date.now(),
+        })
+      );
+      updateAuthUI();
+    }
+
+    function updateAuthUI() {
+      const user = getAuthUser();
+      if (user && loginPanel && workspace && logoutBtn) {
+        loginPanel.hidden = true;
+        workspace.hidden = false;
+        logoutBtn.hidden = false;
+      } else if (loginPanel && workspace && logoutBtn) {
+        loginPanel.hidden = false;
+        workspace.hidden = true;
+        logoutBtn.hidden = true;
+      }
+    }
+
+    document.getElementById("toggle-login-password")?.addEventListener("click", (e) => {
+      const input = document.getElementById("current-password") as HTMLInputElement | null;
+      const btn = e.currentTarget as HTMLButtonElement;
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.textContent = show ? "Hide password" : "Show password";
+    });
+
+    document.getElementById("toggle-signup-password")?.addEventListener("click", (e) => {
+      const input = document.getElementById("new-password") as HTMLInputElement | null;
+      const btn = e.currentTarget as HTMLButtonElement;
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      btn.textContent = show ? "Hide password" : "Show password";
+    });
+
+    document.getElementById("open-signup-view-btn")?.addEventListener("click", () => {
+      if (viewSignin) viewSignin.hidden = true;
+      if (viewSignup) viewSignup.hidden = false;
+    });
+    document.getElementById("open-forgot-password-btn")?.addEventListener("click", () => {
+      if (viewSignin) viewSignin.hidden = true;
+      if (viewSignup) viewSignup.hidden = false;
+    });
+    document.getElementById("back-to-signin-btn")?.addEventListener("click", () => {
+      if (viewSignin) viewSignin.hidden = false;
+      if (viewSignup) viewSignup.hidden = true;
+    });
+
+    document.getElementById("netlify-login-btn")?.addEventListener("click", async () => {
+      let identityEnabled = false;
+      try {
+        const res = await fetch("/.netlify/identity/settings");
+        identityEnabled = res.ok;
+      } catch {
+        identityEnabled = false;
+      }
+      if (identityEnabled && (window as any).netlifyIdentity) {
+        (window as any).netlifyIdentity.open("login");
+        return;
+      }
+      if (netlifyPatDrawer) netlifyPatDrawer.hidden = false;
+      if (netlifyAuthStatus) {
+        netlifyAuthStatus.textContent = "Paste your Netlify Personal Access Token below to verify your account.";
+      }
+    });
+
+    netlifyTokenForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("netlify-pat-input") as HTMLInputElement | null;
+      const token = String(input?.value || "").trim();
+      if (!token) return;
+      try {
+        const res = await fetch("https://api.netlify.com/api/v1/user", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          if (netlifyAuthStatus) netlifyAuthStatus.textContent = "Invalid Netlify token.";
+          return;
+        }
+        const netlifyUser = await res.json();
+        completeSignInSession(netlifyUser.email || OWNER_EMAIL, netlifyUser.full_name || OWNER_NAME);
+      } catch {
+        if (netlifyAuthStatus) netlifyAuthStatus.textContent = "Could not verify with api.netlify.com.";
+      }
+    });
+
+    loginForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (loginErrorMsg) loginErrorMsg.textContent = "";
+      const data = new FormData(loginForm);
+      const email = String(data.get("email") || "").trim().toLowerCase();
+      const password = String(data.get("password") || "");
+
+      if (email !== OWNER_EMAIL) {
+        if (loginErrorMsg) loginErrorMsg.textContent = `Access restricted to ${OWNER_EMAIL}.`;
+        return;
+      }
+
+      const accounts = loadAdminAccounts();
+      let account = accounts.find((a) => String(a.email || "").toLowerCase() === OWNER_EMAIL);
+
+      if (!account || !account.passwordHash) {
+        if (password.length < 8) {
+          if (loginErrorMsg) loginErrorMsg.textContent = "Please choose a password of at least 8 characters.";
+          return;
+        }
+        const salt = generateSaltHex(16);
+        const passwordHash = await hashPasswordWithSalt(password, salt);
+        account = {
+          email: OWNER_EMAIL,
+          name: OWNER_NAME,
+          passwordHash,
+          salt,
+          verified: true,
+          updatedAt: new Date().toISOString(),
+        };
+        await saveAdminAccounts([account]);
+        completeSignInSession(OWNER_EMAIL, OWNER_NAME);
+        return;
+      }
+
+      const candidateHash = await hashPasswordWithSalt(password, account.salt);
+      if (candidateHash !== account.passwordHash) {
+        if (loginErrorMsg) {
+          loginErrorMsg.textContent = "Incorrect password. Click 'Set / Reset password' to update.";
+        }
+        return;
+      }
+      completeSignInSession(OWNER_EMAIL, OWNER_NAME);
+    });
+
+    signupForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (signupErrorMsg) signupErrorMsg.textContent = "";
+      const data = new FormData(signupForm);
+      const newPassword = String(data.get("new-password") || "");
+      if (newPassword.length < 8) {
+        if (signupErrorMsg) signupErrorMsg.textContent = "Password must be at least 8 characters.";
+        return;
+      }
+      const salt = generateSaltHex(16);
+      const passwordHash = await hashPasswordWithSalt(newPassword, salt);
+      await saveAdminAccounts([
+        {
+          email: OWNER_EMAIL,
+          name: OWNER_NAME,
+          passwordHash,
+          salt,
+          verified: true,
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
+      completeSignInSession(OWNER_EMAIL, OWNER_NAME);
+    });
+
+    logoutBtn?.addEventListener("click", () => {
+      sessionStorage.removeItem(AUTH_KEY);
+      updateAuthUI();
+    });
+
+    updateAuthUI();
+
+    // =====================================================
+    // STUDIO TABS NAVIGATION
+    // =====================================================
+    let activeStudioTab = "gdrive";
+    const tabBtns = document.querySelectorAll<HTMLButtonElement>(".studio-tab-btn");
+    const stickySaveBtn = document.getElementById("sticky-studio-save-btn");
+    const stickySaveLabel = document.getElementById("sticky-studio-save-label");
+
+    const panels: Record<string, HTMLElement | null> = {
+      gdrive: document.getElementById("studio-panel-gdrive"),
+      interviews: document.getElementById("studio-panel-interviews"),
+      pages: document.getElementById("studio-panel-pages"),
+      analytics: document.getElementById("studio-panel-analytics"),
+    };
+
+    function switchStudioTab(target: string) {
+      activeStudioTab = target;
+      tabBtns.forEach((btn) => {
+        const isActive = btn.dataset.studioTab === target;
+        btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        btn.className = isActive
+          ? "studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-charcoal text-tiger-500 border-charcoal"
+          : "studio-tab-btn px-4 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider border cursor-pointer transition-colors bg-white text-charcoal border-gray-300 hover:border-charcoal";
+      });
+
+      Object.entries(panels).forEach(([k, panel]) => {
+        if (panel) panel.hidden = k !== target;
+      });
+
+      if (stickySaveBtn && stickySaveLabel) {
+        stickySaveBtn.hidden = target === "analytics" || target === "gdrive";
+        stickySaveLabel.textContent =
+          target === "pages" ? "Save Page Text & SEO" : "Save Interview Post";
+      }
+    }
+
+    tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        switchStudioTab(btn.dataset.studioTab || "gdrive");
+      });
+    });
+
+    stickySaveBtn?.addEventListener("click", () => {
+      if (activeStudioTab === "interviews") {
+        const form = document.getElementById("interview-editor-form") as HTMLFormElement | null;
+        form?.requestSubmit();
+      } else if (activeStudioTab === "pages") {
+        const form = document.getElementById("whole-site-editor-form") as HTMLFormElement | null;
+        form?.requestSubmit();
+      }
+    });
+
+    // =====================================================
+    // TAB 2: INTERVIEWS LIST, EDITOR & PERCENTAGE INLINE IMAGES
+    // =====================================================
+    const interviewsListEl = document.getElementById("interviews-manager-list");
+    const interviewForm = document.getElementById("interview-editor-form") as HTMLFormElement | null;
+    const origSlugInput = document.getElementById("int-original-slug") as HTMLInputElement | null;
+    const titleInput = document.getElementById("int-title") as HTMLInputElement | null;
+    const slugInput = document.getElementById("int-slug") as HTMLInputElement | null;
+    const intervieweeInput = document.getElementById("int-interviewee") as HTMLInputElement | null;
+    const roleInput = document.getElementById("int-role") as HTMLInputElement | null;
+    const companyInput = document.getElementById("int-company") as HTMLInputElement | null;
+    const dateInput = document.getElementById("int-date") as HTMLInputElement | null;
+    const readTimeInput = document.getElementById("int-readtime") as HTMLInputElement | null;
+    const tagsInput = document.getElementById("int-tags") as HTMLInputElement | null;
+    const gdriveUrlInput = document.getElementById("int-gdrive-url") as HTMLInputElement | null;
+    const excerptInput = document.getElementById("int-excerpt") as HTMLTextAreaElement | null;
+    const quoteInput = document.getElementById("int-quote") as HTMLTextAreaElement | null;
+    const coverPreview = document.getElementById("int-cover-preview") as HTMLImageElement | null;
+    const coverUpload = document.getElementById("int-cover-upload") as HTMLInputElement | null;
+    const coverSelect = document.getElementById("int-cover-select") as HTMLSelectElement | null;
+    const coverInput = document.getElementById("int-cover-input") as HTMLInputElement | null;
+    const coverAltInput = document.getElementById("int-cover-alt") as HTMLInputElement | null;
+    const bodyInput = document.getElementById("int-body") as HTMLTextAreaElement | null;
+    const wordCountBadge = document.getElementById("int-wordcount-badge");
+    const inlineUpload = document.getElementById("int-inline-upload") as HTMLInputElement | null;
+    const inlineListEl = document.getElementById("int-inline-images-list");
+    const livePreviewEl = document.getElementById("int-live-body-preview");
+    const formHeadingEl = document.getElementById("interview-form-heading");
+    const modeBadgeEl = document.getElementById("interview-editor-mode-badge");
+    const liveLinkEl = document.getElementById("interview-view-live-link") as HTMLAnchorElement | null;
+    const saveStatusEl = document.getElementById("int-save-status");
+
+    function updateLiveArticlePreview() {
+      const bodyVal = bodyInput?.value || "";
+      const words = bodyVal.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCountBadge) {
+        wordCountBadge.textContent = `${words} words (~${Math.max(1, Math.round(words / 200))} min read)`;
+      }
+      if (livePreviewEl) {
+        livePreviewEl.innerHTML = renderMarkdownWithInlineImages(
+          bodyVal,
+          activeInlineImages
+        );
+      }
+      // Also refresh the paragraph context labels on each inline image card
+      document
+        .querySelectorAll<HTMLElement>("[data-inline-context-idx]")
+        .forEach((el) => {
+          const idx = Number(el.dataset.inlineContextIdx);
+          const item = activeInlineImages[idx];
+          if (item) {
+            const info = getPercentageInsertionPreview(bodyVal, item.percentage);
+            el.textContent = info.contextLabel;
+          }
+        });
+    }
+
+    function renderInlineImagesEditor() {
+      if (!inlineListEl) return;
+      const bodyVal = bodyInput?.value || "";
+
+      if (activeInlineImages.length === 0) {
+        inlineListEl.innerHTML = `
+          <div class="p-6 bg-white border border-dashed border-gray-400 text-center text-sm text-gray-500">
+            No inline images added to this article yet. Upload images above or import from a Google Docs folder to place images at any percentage (0%&ndash;100%) through the article.
+          </div>
+        `;
+        updateLiveArticlePreview();
+        return;
+      }
+
+      inlineListEl.innerHTML = activeInlineImages
+        .map((item, idx) => {
+          const pct = Math.max(0, Math.min(100, Math.round(Number(item.percentage) ?? 50)));
+          const previewInfo = getPercentageInsertionPreview(bodyVal, pct);
+          return `
+            <div class="p-4 bg-white border-2 border-charcoal space-y-3" data-inline-card="${idx}">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-2">
+                <div class="flex items-center gap-2">
+                  <span class="bg-tiger-500 text-charcoal text-xs font-black uppercase px-2 py-0.5">
+                    Inline Image #${idx + 1}
+                  </span>
+                  <span class="text-xs font-bold text-charcoal">
+                    Appears at <strong class="text-tiger-600" data-inline-pct-badge="${idx}">${pct}%</strong> of article
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-promote-to-cover="${idx}"
+                    class="text-xs font-bold text-charcoal hover:text-tiger-600 border border-gray-300 px-2.5 py-1 cursor-pointer bg-gray-50"
+                    title="Swap this inline image with the Main Hero Cover Image"
+                  >
+                    Make Main Cover Image
+                  </button>
+                  <button
+                    type="button"
+                    data-remove-inline="${idx}"
+                    class="text-xs font-bold text-red-700 hover:bg-red-50 border border-red-200 px-2.5 py-1 cursor-pointer bg-white"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                <div class="md:col-span-4">
+                  <div class="aspect-[16/10] bg-gray-200 border border-gray-300 overflow-hidden">
+                    <img
+                      src="${escapeHtml(item.image)}"
+                      alt="${escapeHtml(item.alt || "Inline preview")}"
+                      class="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+
+                <div class="md:col-span-8 space-y-3">
+                  <!-- PERCENTAGE CONTROL (SLIDER + NUMBER INPUT) -->
+                  <div class="p-3 bg-gray-50 border border-gray-300 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <label class="text-xs font-black uppercase tracking-wider text-charcoal">
+                        Position in Article (%) — 0% (Start) to 100% (End)
+                      </label>
+                      <div class="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value="${pct}"
+                          data-inline-pct-num="${idx}"
+                          aria-label="Position percentage in article"
+                          class="w-20 px-2.5 py-1 border-2 border-charcoal bg-white text-charcoal font-black text-sm text-center"
+                        />
+                        <span class="text-sm font-black text-charcoal">%</span>
+                      </div>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value="${pct}"
+                      data-inline-pct-range="${idx}"
+                      aria-label="Slide to adjust percentage position in article"
+                      class="w-full accent-[var(--color-tiger-500)] cursor-pointer"
+                    />
+
+                    <p
+                      data-inline-context-idx="${idx}"
+                      class="text-xs text-gray-700 font-medium m-0 bg-white p-2 border-l-4 border-tiger-500"
+                    >
+                      ${escapeHtml(previewInfo.contextLabel)}
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                        Image URL / Uploaded Path
+                      </label>
+                      <input
+                        type="text"
+                        value="${escapeHtml(item.image)}"
+                        data-inline-field="image"
+                        data-inline-idx="${idx}"
+                        class="w-full px-2.5 py-1.5 border border-gray-400 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                        Alt Text
+                      </label>
+                      <input
+                        type="text"
+                        value="${escapeHtml(item.alt || "")}"
+                        data-inline-field="alt"
+                        data-inline-idx="${idx}"
+                        placeholder="Describe the photo..."
+                        class="w-full px-2.5 py-1.5 border border-gray-400 bg-white text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">
+                      Optional Caption (displayed beneath image in article)
+                    </label>
+                    <input
+                      type="text"
+                      value="${escapeHtml(item.caption || "")}"
+                      data-inline-field="caption"
+                      data-inline-idx="${idx}"
+                      placeholder="Optional caption..."
+                      class="w-full px-2.5 py-1.5 border border-gray-400 bg-white text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      // Wire events for percentage sliders, number inputs, fields, remove, and swap-with-cover
+      inlineListEl
+        .querySelectorAll<HTMLInputElement>("[data-inline-pct-range]")
+        .forEach((rangeInput) => {
+          rangeInput.addEventListener("input", () => {
+            const idx = Number(rangeInput.dataset.inlinePctRange);
+            const val = Math.max(0, Math.min(100, Number(rangeInput.value) || 0));
+            activeInlineImages[idx].percentage = val;
+            const numEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-pct-num="${idx}"]`
+            );
+            if (numEl) numEl.value = String(val);
+            const badgeEl = inlineListEl.querySelector<HTMLElement>(
+              `[data-inline-pct-badge="${idx}"]`
+            );
+            if (badgeEl) badgeEl.textContent = `${val}%`;
+            updateLiveArticlePreview();
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLInputElement>("[data-inline-pct-num]")
+        .forEach((numInput) => {
+          numInput.addEventListener("input", () => {
+            const idx = Number(numInput.dataset.inlinePctNum);
+            const val = Math.max(0, Math.min(100, Number(numInput.value) || 0));
+            activeInlineImages[idx].percentage = val;
+            const rangeEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-pct-range="${idx}"]`
+            );
+            if (rangeEl) rangeEl.value = String(val);
+            const badgeEl = inlineListEl.querySelector<HTMLElement>(
+              `[data-inline-pct-badge="${idx}"]`
+            );
+            if (badgeEl) badgeEl.textContent = `${val}%`;
+            updateLiveArticlePreview();
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLInputElement>("[data-inline-field]")
+        .forEach((input) => {
+          input.addEventListener("input", () => {
+            const idx = Number(input.dataset.inlineIdx);
+            const field = input.dataset.inlineField as "image" | "alt" | "caption";
+            if (activeInlineImages[idx] && field) {
+              (activeInlineImages[idx] as any)[field] = input.value;
+              updateLiveArticlePreview();
+            }
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLButtonElement>("[data-remove-inline]")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.removeInline);
+            activeInlineImages.splice(idx, 1);
+            renderInlineImagesEditor();
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLButtonElement>("[data-promote-to-cover]")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const idx = Number(btn.dataset.promoteToCover);
+            const chosen = activeInlineImages[idx];
+            if (!chosen) return;
+            const previousCover = coverInput?.value || "";
+            const previousCoverAlt = coverAltInput?.value || "";
+
+            if (coverInput) coverInput.value = chosen.image;
+            if (coverPreview) coverPreview.src = chosen.image;
+            if (coverAltInput && chosen.alt) coverAltInput.value = chosen.alt;
+
+            if (previousCover) {
+              activeInlineImages[idx] = {
+                image: previousCover,
+                alt: previousCoverAlt || "Article inline photo",
+                caption: chosen.caption || "",
+                percentage: chosen.percentage,
+              };
+            } else {
+              activeInlineImages.splice(idx, 1);
+            }
+            renderInlineImagesEditor();
+            showToast("Swapped image into Main Hero Cover Image!");
+          });
+        });
+
+      updateLiveArticlePreview();
+    }
+
+    function loadInterviewIntoEditor(item: any, isNew = false) {
+      if (!item) return;
+      if (origSlugInput) origSlugInput.value = isNew ? "" : item.slug || "";
+      if (titleInput) titleInput.value = item.title || "";
+      if (slugInput) slugInput.value = item.slug || slugify(item.interviewee || item.title || "");
+      if (intervieweeInput) intervieweeInput.value = item.interviewee || "";
+      if (roleInput) roleInput.value = item.role || "Copywriter";
+      if (companyInput) companyInput.value = item.company || "Freelance";
+      if (dateInput) {
+        dateInput.value = String(item.date || new Date().toISOString()).split("T")[0];
+      }
+      if (readTimeInput) readTimeInput.value = item.readTime || "6 min read";
+      if (tagsInput) {
+        tagsInput.value = Array.isArray(item.tags)
+          ? item.tags.join(", ")
+          : String(item.tags || "Copywriting");
+      }
+      if (gdriveUrlInput) gdriveUrlInput.value = item.googleDriveFolderUrl || "";
+      if (excerptInput) excerptInput.value = item.excerpt || "";
+      if (quoteInput) quoteInput.value = item.quote || "";
+
+      const resolvedCover =
+        item.coverImage ||
+        (item.interviewee ? `/headshots/${item.interviewee}.webp` : "/favicon.svg");
+      if (coverInput) coverInput.value = resolvedCover;
+      if (coverPreview) coverPreview.src = resolvedCover;
+      if (coverAltInput) {
+        coverAltInput.value =
+          item.coverImageAlt || `Cover image for ${item.interviewee || ""}`;
+      }
+      if (bodyInput) bodyInput.value = item.body || "";
+
+      activeInlineImages = Array.isArray(item.inlineImages)
+        ? structuredClone(item.inlineImages)
+        : [];
+
+      if (formHeadingEl) {
+        formHeadingEl.textContent = isNew
+          ? `New Post: ${item.interviewee || item.title || "Untitled"}`
+          : `Editing: ${item.interviewee} — ${item.title}`;
+      }
+      if (modeBadgeEl) {
+        modeBadgeEl.textContent = isNew
+          ? "New Draft (Click Save & Publish Below)"
+          : "Editing Published Interview";
+      }
+      if (liveLinkEl) {
+        liveLinkEl.href = item.slug ? `/interviews/${item.slug}` : "/interviews";
+      }
+
+      renderInlineImagesEditor();
+      renderInterviewsManagerList();
+    }
+
+    function renderInterviewsManagerList() {
+      if (!interviewsListEl) return;
+      const activeSlug = origSlugInput?.value || "";
+
+      interviewsListEl.innerHTML = interviewsList
+        .map((item, idx) => {
+          const isSelected = item.slug === activeSlug;
+          const thumb =
+            item.coverImage || `/headshots/${item.interviewee}.webp`;
+          const inlineCount = Array.isArray(item.inlineImages)
+            ? item.inlineImages.length
+            : 0;
+          return `
+            <li class="p-3.5 border-2 ${
+              isSelected
+                ? "border-tiger-500 bg-orange-50/40"
+                : "border-gray-200 bg-white"
+            } flex flex-col gap-2">
+              <div class="flex items-start gap-3">
+                <img
+                  src="${escapeHtml(thumb)}"
+                  alt="${escapeHtml(item.interviewee)}"
+                  class="w-14 h-14 object-cover border border-gray-300 shrink-0 bg-gray-100"
+                />
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-bold uppercase tracking-wider text-tiger-600 m-0">
+                    #${idx + 1} &middot; ${escapeHtml(item.interviewee)}
+                  </p>
+                  <h3 class="text-sm font-black uppercase leading-snug text-charcoal m-0 truncate">
+                    ${escapeHtml(item.title)}
+                  </h3>
+                  <p class="text-xs text-gray-500 m-0 mt-0.5">
+                    ${escapeHtml(item.readTime || "5 min read")} &middot; ${inlineCount} inline image${inlineCount === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs font-bold">
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-edit-slug="${escapeHtml(item.slug)}"
+                    class="bg-charcoal text-offwhite px-2.5 py-1 uppercase tracking-wider cursor-pointer"
+                  >
+                    Edit
+                  </button>
+                  <a
+                    href="/interviews/${escapeHtml(item.slug)}"
+                    target="_blank"
+                    class="text-charcoal hover:text-tiger-600 underline px-1"
+                  >
+                    View ↗
+                  </a>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    data-move-up="${idx}"
+                    ${idx === 0 ? "disabled" : ""}
+                    class="px-2 py-1 border border-gray-300 bg-white disabled:opacity-40 cursor-pointer"
+                    title="Move up"
+                  >
+                    &uarr;
+                  </button>
+                  <button
+                    type="button"
+                    data-move-down="${idx}"
+                    ${idx === interviewsList.length - 1 ? "disabled" : ""}
+                    class="px-2 py-1 border border-gray-300 bg-white disabled:opacity-40 cursor-pointer"
+                    title="Move down"
+                  >
+                    &darr;
+                  </button>
+                  <button
+                    type="button"
+                    data-delete-slug="${escapeHtml(item.slug)}"
+                    class="px-2 py-1 border border-red-200 text-red-700 hover:bg-red-50 bg-white cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </li>
+          `;
+        })
+        .join("");
+
+      interviewsListEl
+        .querySelectorAll<HTMLButtonElement>("[data-edit-slug]")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const slug = btn.dataset.editSlug;
+            const found = interviewsList.find((i) => i.slug === slug);
+            if (found) loadInterviewIntoEditor(found, false);
+          });
+        });
+
+      interviewsListEl
+        .querySelectorAll<HTMLButtonElement>("[data-move-up]")
+        .forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const idx = Number(btn.dataset.moveUp);
+            if (idx <= 0) return;
+            const copy = [...interviewsList];
+            const [moved] = copy.splice(idx, 1);
+            copy.splice(idx - 1, 0, moved);
+            await persistInterviewsList(copy, "Updated interview order!");
+          });
+        });
+
+      interviewsListEl
+        .querySelectorAll<HTMLButtonElement>("[data-move-down]")
+        .forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const idx = Number(btn.dataset.moveDown);
+            if (idx >= interviewsList.length - 1) return;
+            const copy = [...interviewsList];
+            const [moved] = copy.splice(idx, 1);
+            copy.splice(idx + 1, 0, moved);
+            await persistInterviewsList(copy, "Updated interview order!");
+          });
+        });
+
+      interviewsListEl
+        .querySelectorAll<HTMLButtonElement>("[data-delete-slug]")
+        .forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const slug = btn.dataset.deleteSlug;
+            if (!slug) return;
+            const target = interviewsList.find((i) => i.slug === slug);
+            if (
+              !confirm(
+                `Delete interview with ${target?.interviewee || slug}?`
+              )
+            ) {
+              return;
+            }
+            const next = interviewsList.filter((i) => i.slug !== slug);
+            await persistInterviewsList(next, `Deleted ${slug}.`);
+            if (next.length > 0) {
+              loadInterviewIntoEditor(next[0], false);
+            }
+          });
+        });
+    }
+
+    // Wire Editor Inputs
+    intervieweeInput?.addEventListener("input", () => {
+      if (!origSlugInput?.value && slugInput) {
+        slugInput.value = slugify(intervieweeInput.value || titleInput?.value || "");
+      }
+    });
+
+    bodyInput?.addEventListener("input", () => {
+      const words = (bodyInput.value || "").trim().split(/\s+/).filter(Boolean).length;
+      if (readTimeInput && words > 20) {
+        readTimeInput.value = `${Math.max(1, Math.round(words / 200))} min read`;
+      }
+      updateLiveArticlePreview();
+    });
+
+    coverInput?.addEventListener("input", () => {
+      if (coverPreview && coverInput.value) {
+        coverPreview.src = coverInput.value;
+      }
+    });
+
+    coverSelect?.addEventListener("change", () => {
+      if (!coverSelect.value) return;
+      if (coverInput) coverInput.value = coverSelect.value;
+      if (coverPreview) coverPreview.src = coverSelect.value;
+    });
+
+    coverUpload?.addEventListener("change", async () => {
+      const file = coverUpload.files?.[0];
+      if (!file) return;
+      showToast(`Uploading ${file.name}...`);
+      const url = await uploadFileToServer(file);
+      if (coverInput) coverInput.value = url;
+      if (coverPreview) coverPreview.src = url;
+      if (coverAltInput && !coverAltInput.value) {
+        coverAltInput.value = `Cover image for ${intervieweeInput?.value || file.name}`;
+      }
+      showToast(`Uploaded main image: ${file.name}`);
+    });
+
+    inlineUpload?.addEventListener("change", async () => {
+      const files = Array.from(inlineUpload.files || []);
+      if (files.length === 0) return;
+      showToast(`Uploading ${files.length} inline image(s)...`);
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const url = await uploadFileToServer(file);
+        const defaultPct = Math.min(
+          90,
+          Math.max(
+            15,
+            Math.round(
+              ((activeInlineImages.length + 1) /
+                (activeInlineImages.length + 2)) *
+                100
+            )
+          )
+        );
+        activeInlineImages.push({
+          image: url,
+          alt: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
+          caption: "",
+          percentage: defaultPct,
+        });
+      }
+      inlineUpload.value = "";
+      renderInlineImagesEditor();
+      showToast(`Added ${files.length} inline image(s)! Adjust their % placement below.`);
+    });
+
+    document.getElementById("int-add-empty-inline-btn")?.addEventListener("click", () => {
+      activeInlineImages.push({
+        image: "/headshots/Joe Emery.webp",
+        alt: "Article illustration",
+        caption: "",
+        percentage: 50,
+      });
+      renderInlineImagesEditor();
+    });
+
+    document.getElementById("btn-new-interview")?.addEventListener("click", () => {
+      loadInterviewIntoEditor(
+        {
+          slug: "",
+          title: "",
+          interviewee: "",
+          role: "Copywriter",
+          company: "Freelance",
+          date: new Date().toISOString().split("T")[0],
+          readTime: "5 min read",
+          excerpt: "",
+          quote: "",
+          tags: ["Copywriting", "Career Survival"],
+          coverImage: "/headshots/Joe Emery.webp",
+          coverImageAlt: "Cover image",
+          inlineImages: [],
+          googleDriveFolderUrl: "",
+          body: "",
+        },
+        true
+      );
+    });
+
+    interviewForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const origSlug = origSlugInput?.value || "";
+      const nextSlug =
+        slugify(slugInput?.value || intervieweeInput?.value || titleInput?.value || "") ||
+        `interview-${Date.now()}`;
+
+      const tags = String(tagsInput?.value || "Copywriting")
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const updatedItem = {
+        slug: nextSlug,
+        title: String(titleInput?.value || "").trim(),
+        interviewee: String(intervieweeInput?.value || "").trim(),
+        role: String(roleInput?.value || "Copywriter").trim(),
+        company: String(companyInput?.value || "Freelance").trim(),
+        date: String(dateInput?.value || new Date().toISOString().split("T")[0]).trim(),
+        readTime: String(readTimeInput?.value || "5 min read").trim(),
+        excerpt: String(excerptInput?.value || "").trim(),
+        quote: String(quoteInput?.value || "").trim(),
+        tags: tags.length > 0 ? tags : ["Copywriting"],
+        coverImage: String(coverInput?.value || "").trim(),
+        coverImageAlt: String(coverAltInput?.value || "").trim(),
+        inlineImages: structuredClone(activeInlineImages),
+        googleDriveFolderUrl: String(gdriveUrlInput?.value || "").trim(),
+        body: String(bodyInput?.value || "").trim(),
+      };
+
+      const nextList = [...interviewsList];
+      const existingIdx = nextList.findIndex(
+        (i) => i.slug === (origSlug || nextSlug)
+      );
+      if (existingIdx !== -1) {
+        nextList[existingIdx] = {
+          ...nextList[existingIdx],
+          ...updatedItem,
+        };
+      } else {
+        // Put newly created interview at the top (#1)
+        nextList.unshift(updatedItem);
+      }
+
+      if (origSlugInput) origSlugInput.value = nextSlug;
+      await persistInterviewsList(
+        nextList,
+        `Saved & published "${updatedItem.title}" (/interviews/${nextSlug})!`
+      );
+      if (saveStatusEl) {
+        saveStatusEl.innerHTML = `Published live! <a href="/interviews/${escapeHtml(nextSlug)}" target="_blank" class="underline">View /interviews/${escapeHtml(nextSlug)} ↗</a>`;
+      }
+      loadInterviewIntoEditor(updatedItem, false);
+    });
+
+    // =====================================================
+    // TAB 1: GOOGLE DOCS FOLDER IMPORTER
+    // =====================================================
+    const gdriveForm = document.getElementById("gdrive-import-form") as HTMLFormElement | null;
+    const gdriveFolderInput = document.getElementById("gdrive-folder-url") as HTMLInputElement | null;
+    const gdriveStatusEl = document.getElementById("gdrive-import-status");
+    const gdriveSummaryEl = document.getElementById("gdrive-discovered-summary");
+    const gdriveMetaEl = document.getElementById("gdrive-discovered-meta");
+    const gdriveFetchBtn = document.getElementById("gdrive-fetch-btn") as HTMLButtonElement | null;
+
+    async function runGoogleDriveFolderImport(folderUrl: string) {
+      if (!folderUrl) return;
+      if (gdriveStatusEl) {
+        gdriveStatusEl.hidden = false;
+        gdriveStatusEl.textContent =
+          "Connecting to Google Drive folder, reading Google Doc copy, and downloading main + inline images...";
+      }
+      if (gdriveFetchBtn) gdriveFetchBtn.disabled = true;
+
+      try {
+        const res = await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "import-gdrive-folder",
+            folderUrl,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok || !data.interview) {
+          throw new Error(
+            data.error ||
+              "Could not import from Google Drive link. Please check that the folder is shared with 'Anyone with the link'."
+          );
+        }
+
+        const imported = data.interview;
+        const filesCount = Array.isArray(data.filesFound)
+          ? data.filesFound.length
+          : 1;
+        const inlineCount = Array.isArray(imported.inlineImages)
+          ? imported.inlineImages.length
+          : 0;
+
+        if (gdriveStatusEl) {
+          gdriveStatusEl.textContent = `Successfully imported "${imported.title}" (${imported.interviewee}) — ${filesCount} file(s) processed, 1 main cover image + ${inlineCount} inline image(s)!`;
+        }
+        if (gdriveSummaryEl && gdriveMetaEl) {
+          gdriveSummaryEl.hidden = false;
+          gdriveMetaEl.textContent = `Headline: "${imported.title}" | Interviewee: ${imported.interviewee} | Read time: ${imported.readTime} | Inline images: ${inlineCount}`;
+        }
+
+        // Load into editor & switch to Tab 2 so user can review/adjust percentages and publish
+        loadInterviewIntoEditor(imported, true);
+        switchStudioTab("interviews");
+        showToast(
+          `Imported ${imported.interviewee} from Google Folder! Review image % positions and click Save & Publish.`
+        );
+      } catch (err: any) {
+        if (gdriveStatusEl) {
+          gdriveStatusEl.hidden = false;
+          gdriveStatusEl.textContent =
+            err?.message || "Failed to import Google Drive folder.";
+        }
+      } finally {
+        if (gdriveFetchBtn) gdriveFetchBtn.disabled = false;
+      }
+    }
+
+    gdriveForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = String(gdriveFolderInput?.value || "").trim();
+      await runGoogleDriveFolderImport(url);
+    });
+
+    document.getElementById("int-resync-gdrive-btn")?.addEventListener("click", async () => {
+      const url = String(gdriveUrlInput?.value || "").trim();
+      if (!url) {
+        alert("Paste a Google Drive folder link in the field first.");
+        return;
+      }
+      await runGoogleDriveFolderImport(url);
+    });
+
+    document.getElementById("gdrive-open-in-editor-btn")?.addEventListener("click", () => {
+      switchStudioTab("interviews");
+    });
+
+    // Quick Build Fallback (Paste Google Doc copy + select local folder images)
+    document.getElementById("quick-build-submit-btn")?.addEventListener("click", async () => {
+      const copyEl = document.getElementById("quick-build-copy") as HTMLTextAreaElement | null;
+      const nameEl = document.getElementById("quick-build-interviewee") as HTMLInputElement | null;
+      const filesEl = document.getElementById("quick-build-images") as HTMLInputElement | null;
+
+      const rawText = String(copyEl?.value || "").trim();
+      if (!rawText) {
+        alert("Please paste the interview copy first.");
+        return;
+      }
+
+      showToast("Uploading images & building interview post...");
+      const files = Array.from(filesEl?.files || []);
+      const uploadedImages: Array<{ name: string; url: string }> = [];
+      for (const file of files) {
+        const url = await uploadFileToServer(file);
+        uploadedImages.push({ name: file.name, url });
+      }
+
+      try {
+        const res = await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "parse-raw-copy",
+            rawText,
+            folderTitle: String(nameEl?.value || "").trim(),
+            images: uploadedImages,
+          }),
+        });
+        const data = await res.json();
+        if (data.ok && data.interview) {
+          loadInterviewIntoEditor(data.interview, true);
+          switchStudioTab("interviews");
+          showToast(
+            `Auto-built post for ${data.interview.interviewee}! Adjust image % sliders below and click Save & Publish.`
+          );
+        }
+      } catch {
+        alert("Could not parse copy.");
+      }
+    });
+
+    // =====================================================
+    // TAB 3: WHOLE-SITE TEXT & SEO EDITOR
+    // =====================================================
+    let activePageSection = "home";
+    const pageTitleEl = document.getElementById("page-editor-title");
+    const fieldsContainer = document.getElementById("whole-site-fields-container");
+    const wholeSiteForm = document.getElementById("whole-site-editor-form") as HTMLFormElement | null;
+    const pageSaveStatus = document.getElementById("page-save-status");
+    const pageSecBtns = document.querySelectorAll<HTMLButtonElement>(".page-sec-btn");
+
+    const sectionTitles: Record<string, string> = {
+      home: "Editing: Home Page (/)",
+      interviewsPage: "Editing: Interviews Header (/interviews)",
+      about: "Editing: About Page (/about)",
+      seo: "Editing: SEO, AEO & Social Sharing",
+      global: "Editing: Global Header & Footer",
+    };
+
+    function renderTextField(id: string, label: string, val: string, rows = 1): string {
+      if (rows > 1) {
+        return `
+          <div>
+            <label for="${id}" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">${label}</label>
+            <textarea id="${id}" data-site-field="${id}" rows="${rows}" class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal text-sm">${escapeHtml(val || "")}</textarea>
+          </div>
+        `;
+      }
+      return `
+        <div>
+          <label for="${id}" class="block text-xs font-bold uppercase tracking-wider text-charcoal mb-1">${label}</label>
+          <input id="${id}" data-site-field="${id}" type="text" value="${escapeHtml(val || "")}" class="w-full px-3.5 py-2 border border-gray-400 bg-gray-50 text-charcoal text-sm" />
+        </div>
+      `;
+    }
+
+    function renderActivePageFields() {
+      if (!fieldsContainer) return;
+      if (pageTitleEl) {
+        pageTitleEl.textContent = sectionTitles[activePageSection] || "Edit Page";
+      }
+
+      if (activePageSection === "home") {
+        const h = currentSiteContent.home || {};
+        const themes = Array.isArray(h.themes) ? h.themes : [];
+        fieldsContainer.innerHTML = `
+          <div class="space-y-4">
+            <h3 class="text-base font-black uppercase border-b border-gray-200 pb-2">1. Hero Section</h3>
+            ${renderTextField("home.badge", "Top Badge Label", h.badge)}
+            ${renderTextField("home.heroHeadingLine1", "Hero Main Heading Line 1", h.heroHeadingLine1)}
+            ${renderTextField("home.heroHeadingHighlight", "Hero Highlighted Heading (Orange)", h.heroHeadingHighlight)}
+            ${renderTextField("home.heroSub", "Hero Intro Paragraph", h.heroSub, 3)}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              ${renderTextField("home.primaryCtaLabel", "Primary Button Label", h.primaryCtaLabel)}
+              ${renderTextField("home.secondaryCtaLabel", "Secondary Button Label", h.secondaryCtaLabel)}
+            </div>
+          </div>
+
+          <div class="space-y-4 pt-4">
+            <h3 class="text-base font-black uppercase border-b border-gray-200 pb-2">2. Pull-Quote Banner</h3>
+            ${renderTextField("home.pullQuote", "Pull Quote Text", h.pullQuote, 3)}
+          </div>
+
+          <div class="space-y-4 pt-4">
+            <h3 class="text-base font-black uppercase border-b border-gray-200 pb-2">3. The Four Questions Cards</h3>
+            ${renderTextField("home.themesHeading", "Section Heading", h.themesHeading)}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              ${themes
+                .map(
+                  (t: any, idx: number) => `
+                  <div class="p-4 bg-gray-50 border border-gray-300 space-y-2">
+                    ${renderTextField(`home.themes.${idx}.title`, `Card #${idx + 1} Title`, t.title)}
+                    ${renderTextField(`home.themes.${idx}.subtitle`, `Card #${idx + 1} Subtitle`, t.subtitle)}
+                    ${renderTextField(`home.themes.${idx}.description`, `Card #${idx + 1} Description`, t.description, 3)}
+                  </div>
+                `
+                )
+                .join("")}
+            </div>
+            ${renderTextField("home.bottomCtaLabel", "Bottom Button Label", h.bottomCtaLabel)}
+          </div>
+        `;
+      } else if (activePageSection === "interviewsPage") {
+        const ip = currentSiteContent.interviewsPage || {};
+        fieldsContainer.innerHTML = `
+          <div class="space-y-4">
+            ${renderTextField("interviewsPage.heading", "Page Heading (H1)", ip.heading)}
+            ${renderTextField("interviewsPage.subheading", "Page Subheading", ip.subheading, 2)}
+          </div>
+        `;
+      } else if (activePageSection === "about") {
+        const a = currentSiteContent.about || {};
+        fieldsContainer.innerHTML = `
+          <div class="space-y-4">
+            ${renderTextField("about.heading", "About Page Heading (H1)", a.heading)}
+            ${renderTextField("about.subheading", "About Subheading", a.subheading, 2)}
+            ${renderTextField("about.introHeading", "Section 1 Heading", a.introHeading)}
+            ${renderTextField("about.introPara1", "Section 1 Paragraph 1", a.introPara1, 4)}
+            ${renderTextField("about.introPara2", "Section 1 Paragraph 2", a.introPara2, 3)}
+            ${renderTextField("about.whoHeading", "Who It's For Heading", a.whoHeading)}
+            ${renderTextField("about.whyHeading", "Why You Should Read It Heading", a.whyHeading)}
+            ${renderTextField("about.ctaLabel", "Bottom Button Label", a.ctaLabel)}
+          </div>
+        `;
+      } else if (activePageSection === "seo") {
+        const s = currentSiteContent.seo || {};
+        fieldsContainer.innerHTML = `
+          <div class="space-y-4">
+            ${renderTextField("seo.siteName", "Site Name", s.siteName)}
+            ${renderTextField("seo.homeTitle", "Home Page Title Tag", s.homeTitle)}
+            ${renderTextField("seo.homeDescription", "Home Meta Description", s.homeDescription, 2)}
+            ${renderTextField("seo.interviewsTitle", "Interviews Page Title Tag", s.interviewsTitle)}
+            ${renderTextField("seo.interviewsDescription", "Interviews Meta Description", s.interviewsDescription, 2)}
+            ${renderTextField("seo.aboutTitle", "About Page Title Tag", s.aboutTitle)}
+            ${renderTextField("seo.aboutDescription", "About Meta Description", s.aboutDescription, 2)}
+            ${renderTextField("seo.keywords", "Default SEO Keywords (comma-separated)", s.keywords, 2)}
+            ${renderTextField("seo.aeoSummary", "AI Search (llms.txt) Summary Blockquote", s.aeoSummary, 3)}
+            ${renderTextField("seo.aeoDetail", "AI Search (llms.txt) Detailed Description", s.aeoDetail, 3)}
+          </div>
+        `;
+      } else if (activePageSection === "global") {
+        const g = currentSiteContent.global || {};
+        fieldsContainer.innerHTML = `
+          <div class="space-y-4">
+            ${renderTextField("global.siteTitle", "Top Navbar Brand Title", g.siteTitle)}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              ${renderTextField("global.navInterviewsLabel", "Navbar Interviews Link Label", g.navInterviewsLabel)}
+              ${renderTextField("global.navAboutLabel", "Navbar About Link Label", g.navAboutLabel)}
+            </div>
+            ${renderTextField("global.footerHeading", "Footer Newsletter Heading", g.footerHeading)}
+            ${renderTextField("global.footerBody", "Footer Newsletter Copy", g.footerBody, 2)}
+            ${renderTextField("global.footerButtonLabel", "Footer Subscribe Button Label", g.footerButtonLabel)}
+            ${renderTextField("global.footerTagline", "Footer Tagline", g.footerTagline, 2)}
+            ${renderTextField("global.authorName", "Default Article Author Name (JSON-LD)", g.authorName)}
+          </div>
+        `;
+      }
+    }
+
+    function setByPath(obj: any, pathStr: string, value: any) {
+      const parts = pathStr.split(".");
+      let cur = obj;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        if (cur[p] === undefined || cur[p] === null) {
+          cur[p] = /^\d+$/.test(parts[i + 1]) ? [] : {};
+        }
+        cur = cur[p];
+      }
+      cur[parts[parts.length - 1]] = value;
+    }
+
+    async function saveWholeSiteContent() {
+      if (!fieldsContainer) return;
+      fieldsContainer
+        .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-site-field]")
+        .forEach((el) => {
+          const path = el.dataset.siteField;
+          if (path) {
+            setByPath(currentSiteContent, path, el.value);
+          }
+        });
+
+      localStorage.setItem(SITE_CONTENT_KEY, JSON.stringify(currentSiteContent));
+      try {
+        await fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "sync-site-content",
+            content: currentSiteContent,
+          }),
+        });
+      } catch {
+        // ignore
+      }
+      const msg = "Saved & published page text and SEO settings!";
+      if (pageSaveStatus) pageSaveStatus.textContent = msg;
+      showToast(msg);
+    }
+
+    pageSecBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activePageSection = btn.dataset.pageSection || "home";
+        pageSecBtns.forEach((b) => {
+          const active = b.dataset.pageSection === activePageSection;
+          b.className = active
+            ? "page-sec-btn w-full text-left p-3.5 border-2 border-charcoal bg-charcoal text-tiger-500 font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between"
+            : "page-sec-btn w-full text-left p-3.5 border border-gray-300 bg-white text-charcoal font-bold uppercase tracking-wider text-xs cursor-pointer flex items-center justify-between";
+        });
+        renderActivePageFields();
+      });
+    });
+
+    wholeSiteForm?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await saveWholeSiteContent();
+    });
+    document.getElementById("top-save-page-btn")?.addEventListener("click", saveWholeSiteContent);
+
+    // =====================================================
+    // TAB 4: BACKUPS, ANALYTICS & RESET
+    // =====================================================
+    document.getElementById("download-interviews-json-btn")?.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(interviewsList, null, 2)], {
+        type: "application/json",
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "rtt-interviews-backup.json";
+      a.click();
+    });
+
+    document.getElementById("download-site-json-btn")?.addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(currentSiteContent, null, 2)], {
+        type: "application/json",
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "site-content.json";
+      a.click();
+    });
+
+    document.getElementById("reset-browser-cms-cache")?.addEventListener("click", () => {
+      if (!confirm("Reset local browser cache and reload from server state?")) return;
+      localStorage.removeItem(INTERVIEWS_STORAGE_KEY);
+      localStorage.removeItem(SITE_CONTENT_KEY);
+      window.location.reload();
+    });
+
+    // Initial load: check if URL has ?edit=slug
+    const params = new URLSearchParams(window.location.search);
+    const editSlugParam = params.get("edit");
+    if (editSlugParam) {
+      const target = interviewsList.find((i) => i.slug === editSlugParam);
+      if (target) {
+        loadInterviewIntoEditor(target, false);
+        switchStudioTab("interviews");
+      }
+    } else if (interviewsList.length > 0) {
+      loadInterviewIntoEditor(interviewsList[0], false);
+    }
+
+    renderActivePageFields();
+
+    // Sync with server (/Netlify Blobs) on load
+    fetch("/__cms-sync", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cloud) => {
+        if (!cloud || !cloud.ok) return;
+
+        if (cloud.analytics) {
+          const pvEl = document.getElementById("analytics-stat-pageviews");
+          if (pvEl) pvEl.textContent = String(cloud.analytics.pageviews || 0);
+          const topPagesContainer = document.getElementById("analytics-top-pages-container");
+          const counts = cloud.analytics.pageCounts || {};
+          const entries = Object.entries(counts).sort(
+            (a: any, b: any) => Number(b[1]) - Number(a[1])
+          );
+          if (topPagesContainer && entries.length > 0) {
+            topPagesContainer.innerHTML = entries
+              .slice(0, 8)
+              .map(
+                ([pg, cnt]) =>
+                  `<div class="flex justify-between py-1.5 border-b border-gray-100"><span class="font-mono">${escapeHtml(pg)}</span><strong>${cnt} views</strong></div>`
+              )
+              .join("");
+          }
+        }
+
+        const hasLocalInterviews = Boolean(localStorage.getItem(INTERVIEWS_STORAGE_KEY));
+        if (Array.isArray(cloud.interviews) && cloud.interviews.length > 0) {
+          interviewsList = cloud.interviews;
+          localStorage.setItem(INTERVIEWS_STORAGE_KEY, JSON.stringify(interviewsList));
+          renderInterviewsManagerList();
+          const currentSlug = origSlugInput?.value;
+          const active = interviewsList.find((i) => i.slug === currentSlug) || interviewsList[0];
+          if (active) loadInterviewIntoEditor(active, false);
+        } else if (hasLocalInterviews) {
+          fetch("/__cms-sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "sync-interviews", items: interviewsList }),
+          }).catch(() => {});
+        }
+
+        if (cloud.siteContent && typeof cloud.siteContent === "object") {
+          currentSiteContent = cloud.siteContent;
+          localStorage.setItem(SITE_CONTENT_KEY, JSON.stringify(currentSiteContent));
+          renderActivePageFields();
+        }
+      })
+      .catch(() => {});
+  }
+
+  initRttAdminStudio();
+  document.addEventListener("astro:page-load", initRttAdminStudio);
+</script>

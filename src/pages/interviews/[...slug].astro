@@ -1,6 +1,10 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
+import {
+  renderMarkdownWithInlineImages,
+  resolveInterviewImage,
+} from '../../utils/articleRenderer';
 
 export async function getStaticPaths() {
   const interviews = await getCollection('interviews');
@@ -11,9 +15,11 @@ export async function getStaticPaths() {
 }
 
 const { interview } = Astro.props;
-const { Content } = await render(interview);
-
-const imagePath = `/headshots/${interview.data.interviewee}.webp`;
+const imagePath = resolveInterviewImage(interview.data);
+const renderedArticleHtml = renderMarkdownWithInlineImages(
+  interview.body || '',
+  interview.data.inlineImages || []
+);
 
 const allInterviews = await getCollection('interviews');
 const relatedInterviews = allInterviews
@@ -82,23 +88,56 @@ const schema = {
   publishedTime={interview.data.date}
   schema={schema}
 >
-  <article class="bg-white border-b-8 border-tiger-500">
+  <article
+    id="rtt-interview-article"
+    data-interview-slug={interview.id}
+    class="bg-white border-b-8 border-tiger-500"
+  >
     <header class="container mx-auto px-6 max-w-4xl py-20 lg:py-32">
-      <div class="mb-8 flex flex-wrap gap-4 items-center">
-        {interview.data.tags.map(tag => (
-          <span class="bg-[var(--color-charcoal)] text-[var(--color-offwhite)] text-xs font-bold uppercase tracking-widest px-3 py-1">
-            {tag}
-          </span>
-        ))}
+      <div class="mb-8 flex flex-wrap justify-between gap-4 items-center">
+        <div id="interview-tags-list" class="flex flex-wrap gap-3 items-center">
+          {interview.data.tags.map(tag => (
+            <span class="bg-[var(--color-charcoal)] text-[var(--color-offwhite)] text-xs font-bold uppercase tracking-widest px-3 py-1">
+              {tag}
+            </span>
+          ))}
+        </div>
+
+        <a
+          id="interview-edit-studio-link"
+          href={`/admin?edit=${interview.id}`}
+          class="text-xs font-bold uppercase tracking-widest text-tiger-600 hover:text-tiger-500 border border-tiger-500 px-3 py-1 transition-colors"
+        >
+          Edit in /admin &rarr;
+        </a>
       </div>
-      <h1 class="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.9] mb-12">
+
+      <h1
+        id="interview-title"
+        class="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.9] mb-12"
+      >
         {interview.data.title}
       </h1>
-      <div class="w-full bg-gray-200 border-b-8 border-tiger-500 overflow-hidden shadow-2xl mb-12" style="aspect-ratio: 1200/628">
-        <img src={imagePath} alt={`Cover image for ${interview.data.interviewee}`} class="w-full h-full object-cover hover:scale-105 hover:brightness-110 transition-all duration-700" width="1200" height="628" fetchpriority="high" />
+
+      <div
+        class="w-full bg-gray-200 border-b-8 border-tiger-500 overflow-hidden shadow-2xl mb-12"
+        style="aspect-ratio: 1200/628"
+      >
+        <img
+          id="interview-hero-img"
+          src={imagePath}
+          alt={interview.data.coverImageAlt || `Cover image for ${interview.data.interviewee}`}
+          class="w-full h-full object-cover hover:scale-105 hover:brightness-110 transition-all duration-700"
+          width="1200"
+          height="628"
+          fetchpriority="high"
+        />
       </div>
       
-      <blockquote class="pull-quote text-2xl md:text-4xl max-w-3xl mb-12">
+      <blockquote
+        id="interview-quote"
+        class="pull-quote text-2xl md:text-4xl max-w-3xl mb-12"
+      >
         "{interview.data.quote}"
       </blockquote>
 
@@ -106,60 +145,233 @@ const schema = {
         <div>
           <h4 class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Published</h4>
           <p class="text-lg text-[var(--color-charcoal)]">
-            <time datetime={interview.data.date.toISOString()}>
+            <time id="interview-date" datetime={interview.data.date.toISOString()}>
               {interview.data.date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             </time>
           </p>
         </div>
         <div>
           <h4 class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Interviewee</h4>
-          <p class="text-lg font-bold text-[var(--color-charcoal)]">{interview.data.interviewee}</p>
+          <p id="interview-person" class="text-lg font-bold text-[var(--color-charcoal)]">{interview.data.interviewee}</p>
         </div>
         <div>
           <h4 class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Role</h4>
-          <p class="text-lg text-[var(--color-charcoal)]">{interview.data.role}</p>
+          <p id="interview-role" class="text-lg text-[var(--color-charcoal)]">{interview.data.role}</p>
         </div>
         <div>
           <h4 class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Company</h4>
-          <p class="text-lg text-[var(--color-charcoal)]">{interview.data.company}</p>
+          <p id="interview-company" class="text-lg text-[var(--color-charcoal)]">{interview.data.company}</p>
         </div>
         <div>
           <h4 class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Read Time</h4>
-          <p class="text-lg text-[var(--color-charcoal)]">{interview.data.readTime}</p>
+          <p id="interview-readtime" class="text-lg text-[var(--color-charcoal)]">{interview.data.readTime}</p>
         </div>
       </div>
     </header>
 
     <div class="bg-[var(--color-offwhite)] py-20 border-t border-gray-200">
       <div class="container mx-auto px-6 max-w-3xl">
-        <div class="prose prose-lg prose-neutral max-w-none 
+        <div
+          id="interview-body-container"
+          class="prose prose-lg prose-neutral max-w-none 
+          prose-h2:text-3xl prose-h2:font-bold prose-h2:uppercase prose-h2:tracking-tight prose-h2:mt-16 prose-h2:mb-8
           prose-h3:text-3xl prose-h3:font-bold prose-h3:uppercase prose-h3:tracking-tight prose-h3:mt-16 prose-h3:mb-8
           prose-p:leading-relaxed prose-p:mb-8
-          prose-strong:text-[var(--color-charcoal)] prose-strong:font-black">
-          <Content />
-        </div>
+          prose-strong:text-[var(--color-charcoal)] prose-strong:font-black"
+          set:html={renderedArticleHtml}
+        />
       </div>
     </div>
     
-    {relatedInterviews.length > 0 && (
-      <div class="bg-gray-100 py-20">
-        <div class="container mx-auto px-6 max-w-4xl">
-          <h3 class="text-3xl font-bold uppercase tracking-tight mb-10">Related Interviews</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {relatedInterviews.map(related => (
+    <div
+      id="interview-related-section"
+      hidden={relatedInterviews.length === 0}
+      class="bg-gray-100 py-20"
+    >
+      <div class="container mx-auto px-6 max-w-4xl">
+        <h3 class="text-3xl font-bold uppercase tracking-tight mb-10">Related Interviews</h3>
+        <div id="interview-related-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {relatedInterviews.map(related => {
+            const relImg = resolveInterviewImage(related.data);
+            return (
               <a href={`/interviews/${related.id}`} class="block group">
                 <div class="bg-white p-6 shadow-md border-b-4 border-transparent group-hover:border-tiger-500 transition-colors h-full flex flex-col">
                   <div class="mb-4">
-                    <img src={`/headshots/${related.data.interviewee}.webp`} alt={related.data.interviewee} class="w-16 h-16 rounded-full object-cover mb-4" loading="lazy" width="64" height="64" />
+                    <img src={relImg} alt={related.data.interviewee} class="w-16 h-16 rounded-full object-cover mb-4" loading="lazy" width="64" height="64" />
                     <h4 class="font-bold text-lg leading-tight uppercase group-hover:text-tiger-600 transition-colors">{related.data.title}</h4>
                   </div>
                   <p class="text-gray-600 text-sm mt-auto">Featuring {related.data.interviewee}</p>
                 </div>
               </a>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
-    )}
+    </div>
   </article>
 </Layout>
+
+<script>
+  import {
+    renderMarkdownWithInlineImages,
+    resolveInterviewImage,
+    escapeHtml,
+  } from '../../utils/articleRenderer';
+
+  const INTERVIEWS_STORAGE_KEY = 'rtt_cms_interviews_v1';
+
+  function initInterviewDetailHydration() {
+    const articleEl = document.getElementById('rtt-interview-article');
+    if (!articleEl) return;
+
+    const urlSlug = decodeURIComponent(
+      window.location.pathname.replace(/^\/interviews\//, '').replace(/\/+$/, '')
+    );
+    const activeSlug = urlSlug || articleEl.dataset.interviewSlug || '';
+    if (!activeSlug) return;
+
+    const editLink = document.getElementById('interview-edit-studio-link') as HTMLAnchorElement | null;
+    if (editLink) {
+      editLink.href = `/admin?edit=${encodeURIComponent(activeSlug)}`;
+    }
+
+    function applyInterviewFromList(list: any[]) {
+      if (!Array.isArray(list) || list.length === 0) return;
+      const post = list.find((item) => item && item.slug === activeSlug);
+      if (!post) return;
+
+      document.title = `${post.title} | Ride The Tiger`;
+
+      const titleEl = document.getElementById('interview-title');
+      if (titleEl && post.title) titleEl.textContent = post.title;
+
+      const tagsEl = document.getElementById('interview-tags-list');
+      if (tagsEl && Array.isArray(post.tags)) {
+        tagsEl.innerHTML = post.tags
+          .map(
+            (t: string) =>
+              `<span class="bg-[var(--color-charcoal)] text-[var(--color-offwhite)] text-xs font-bold uppercase tracking-widest px-3 py-1">${escapeHtml(t)}</span>`
+          )
+          .join('');
+      }
+
+      const heroImg = document.getElementById('interview-hero-img') as HTMLImageElement | null;
+      const imgPath = resolveInterviewImage(post);
+      if (heroImg && imgPath) {
+        heroImg.src = imgPath;
+        heroImg.alt = post.coverImageAlt || `Cover image for ${post.interviewee || ''}`;
+      }
+
+      const quoteEl = document.getElementById('interview-quote');
+      if (quoteEl && post.quote !== undefined) {
+        const cleanQuote = String(post.quote || '').replace(/^[“"']|[”"']$/g, '');
+        quoteEl.textContent = `"${cleanQuote}"`;
+      }
+
+      const dateEl = document.getElementById('interview-date');
+      if (dateEl && post.date) {
+        const dt = new Date(post.date);
+        if (!isNaN(dt.valueOf())) {
+          dateEl.setAttribute('datetime', dt.toISOString());
+          dateEl.textContent = dt.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+        }
+      }
+
+      const personEl = document.getElementById('interview-person');
+      if (personEl && post.interviewee) personEl.textContent = post.interviewee;
+
+      const roleEl = document.getElementById('interview-role');
+      if (roleEl && post.role) roleEl.textContent = post.role;
+
+      const companyEl = document.getElementById('interview-company');
+      if (companyEl && post.company) companyEl.textContent = post.company;
+
+      const readTimeEl = document.getElementById('interview-readtime');
+      if (readTimeEl && post.readTime) readTimeEl.textContent = post.readTime;
+
+      const bodyEl = document.getElementById('interview-body-container');
+      if (bodyEl && typeof post.body === 'string') {
+        bodyEl.innerHTML = renderMarkdownWithInlineImages(
+          post.body,
+          Array.isArray(post.inlineImages) ? post.inlineImages : []
+        );
+      }
+
+      // Related interviews hydration
+      const relatedSection = document.getElementById('interview-related-section');
+      const relatedGrid = document.getElementById('interview-related-grid');
+      if (relatedSection && relatedGrid) {
+        const postTags: string[] = Array.isArray(post.tags) ? post.tags : [];
+        const related = list
+          .filter(
+            (i) =>
+              i &&
+              i.slug !== post.slug &&
+              Array.isArray(i.tags) &&
+              i.tags.some((t: string) => postTags.includes(t))
+          )
+          .slice(0, 3);
+
+        if (related.length > 0) {
+          relatedSection.hidden = false;
+          relatedGrid.innerHTML = related
+            .map((rel) => {
+              const relImg = resolveInterviewImage(rel);
+              return `
+                <a href="/interviews/${escapeHtml(rel.slug)}" class="block group">
+                  <div class="bg-white p-6 shadow-md border-b-4 border-transparent group-hover:border-tiger-500 transition-colors h-full flex flex-col">
+                    <div class="mb-4">
+                      <img src="${escapeHtml(relImg)}" alt="${escapeHtml(rel.interviewee)}" class="w-16 h-16 rounded-full object-cover mb-4" loading="lazy" width="64" height="64" />
+                      <h4 class="font-bold text-lg leading-tight uppercase group-hover:text-tiger-600 transition-colors">${escapeHtml(rel.title)}</h4>
+                    </div>
+                    <p class="text-gray-600 text-sm mt-auto">Featuring ${escapeHtml(rel.interviewee)}</p>
+                  </div>
+                </a>
+              `;
+            })
+            .join('');
+        } else {
+          relatedSection.hidden = true;
+        }
+      }
+    }
+
+    let localList: any[] | null = null;
+    try {
+      const raw = localStorage.getItem(INTERVIEWS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localList = parsed;
+          applyInterviewFromList(parsed);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    fetch('/__cms-sync', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cloud) => {
+        if (!cloud || !cloud.ok) return;
+        if (Array.isArray(cloud.interviews) && cloud.interviews.length > 0) {
+          localStorage.setItem(INTERVIEWS_STORAGE_KEY, JSON.stringify(cloud.interviews));
+          applyInterviewFromList(cloud.interviews);
+        } else if (localList && localList.length > 0) {
+          fetch('/__cms-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'sync-interviews', items: localList }),
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }
+
+  initInterviewDetailHydration();
+  document.addEventListener('astro:page-load', initInterviewDetailHydration);
+</script>

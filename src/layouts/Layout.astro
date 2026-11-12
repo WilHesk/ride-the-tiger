@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import siteContent from '../data/site-content.json';
 
 export interface Props {
   title?: string;
@@ -11,18 +12,40 @@ export interface Props {
   schema?: any;
 }
 
+const seoConfig = siteContent.seo || {};
+const globalConfig = siteContent.global || {};
+const pathname = Astro.url.pathname.replace(/\/+$/, "") || "/";
+
+const pageTitleByPath: Record<string, string | undefined> = {
+  "/": seoConfig.homeTitle,
+  "/interviews": seoConfig.interviewsTitle,
+  "/about": seoConfig.aboutTitle,
+};
+
+const pageDescByPath: Record<string, string | undefined> = {
+  "/": seoConfig.homeDescription,
+  "/interviews": seoConfig.interviewsDescription,
+  "/about": seoConfig.aboutDescription,
+};
+
+const defaultKeywords = (seoConfig.keywords || "creativity, AI, copywriting, design, agencies")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const { 
-  title = "Ride The Tiger", 
-  description = "An Editorial Series on Creative Survival",
-  image = "/favicon.svg",
+  title = pageTitleByPath[pathname] || seoConfig.shareTitle || "Ride The Tiger", 
+  description = pageDescByPath[pathname] || seoConfig.shareDescription || "An Editorial Series on Creative Survival",
+  image = seoConfig.shareImage || "/favicon.svg",
   type = "website",
-  keywords = ["creativity", "AI", "copywriting", "design", "agencies"],
+  keywords = defaultKeywords,
   publishedTime,
   schema
 } = Astro.props;
 
-const canonicalURL = new URL(Astro.url.pathname, Astro.site || Astro.url.origin);
-const siteName = "Ride The Tiger";
+const siteBase = Astro.site || new URL("https://ride-the-tiger.netlify.app");
+const canonicalURL = new URL(Astro.url.pathname, siteBase);
+const siteName = seoConfig.siteName || "Ride The Tiger";
 ---
 
 <html lang="en">
@@ -42,7 +65,7 @@ const siteName = "Ride The Tiger";
     <meta property="og:url" content={canonicalURL} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL(image, Astro.site || Astro.url.origin)} />
+    <meta property="og:image" content={new URL(image, siteBase)} />
     <meta property="og:site_name" content={siteName} />
     {publishedTime && <meta property="article:published_time" content={publishedTime.toISOString()} />}
 
@@ -51,17 +74,31 @@ const siteName = "Ride The Tiger";
     <meta property="twitter:url" content={canonicalURL} />
     <meta property="twitter:title" content={title} />
     <meta property="twitter:description" content={description} />
-    <meta property="twitter:image" content={new URL(image, Astro.site || Astro.url.origin)} />
+    <meta property="twitter:image" content={new URL(image, siteBase)} />
     
-    {schema && <script type="application/ld+json" set:html={JSON.stringify(schema)} />}
+    {schema && <script id="rtt-jsonld-schema" type="application/ld+json" set:html={JSON.stringify(schema)} />}
   </head>
   <body class="min-h-screen flex flex-col">
-    <header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-offwhite)]/80 border-b border-gray-200 py-6">
+    <header class="sticky top-0 z-50 backdrop-blur-md bg-[var(--color-offwhite)]/90 border-b border-gray-200 py-6">
       <div class="container mx-auto px-6 max-w-5xl flex justify-between items-center">
-        <a href="/" class="text-2xl font-bold tracking-tighter uppercase">Ride The Tiger</a>
-        <nav class="space-x-6 text-sm font-medium tracking-wide uppercase">
-          <a href="/interviews" class="hover:text-tiger-600 transition-colors">Interviews</a>
-          <a href="/about" class="hover:text-tiger-600 transition-colors">About</a>
+        <a href="/" data-cms-text="global.siteTitle" class="text-2xl font-bold tracking-tighter uppercase">
+          {globalConfig.siteTitle || "Ride The Tiger"}
+        </a>
+        <nav class="flex items-center space-x-6 text-sm font-medium tracking-wide uppercase">
+          <a href="/interviews" data-cms-text="global.navInterviewsLabel" class="hover:text-tiger-600 transition-colors">
+            {globalConfig.navInterviewsLabel || "Interviews"}
+          </a>
+          <a href="/about" data-cms-text="global.navAboutLabel" class="hover:text-tiger-600 transition-colors">
+            {globalConfig.navAboutLabel || "About"}
+          </a>
+          <a
+            href="/admin"
+            id="nav-studio-pill"
+            hidden
+            class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-3 py-1 text-xs uppercase tracking-wider transition-colors"
+          >
+            Studio
+          </a>
         </nav>
       </div>
     </header>
@@ -73,20 +110,207 @@ const siteName = "Ride The Tiger";
     <footer class="bg-charcoal text-offwhite py-16 mt-24 border-t-4 border-tiger-500">
       <div class="container mx-auto px-6 max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-12">
         <div>
-          <h3 class="text-3xl font-bold mb-4 font-serif">Stay on top of the shift.</h3>
-          <p class="text-gray-400 max-w-md mb-8 leading-relaxed">
-            New peer interviews, candid teardowns, and creative survival strategies delivered straight to your inbox every fortnight.
+          <h3 data-cms-text="global.footerHeading" class="text-3xl font-bold mb-4 font-serif">
+            {globalConfig.footerHeading || "Stay on top of the shift."}
+          </h3>
+          <p data-cms-text="global.footerBody" class="text-gray-400 max-w-md mb-8 leading-relaxed">
+            {globalConfig.footerBody || "New peer interviews, candid teardowns, and creative survival strategies delivered straight to your inbox every fortnight."}
           </p>
-          <div class="flex gap-2">
-            <input type="email" placeholder="Your email address" class="bg-gray-800 text-white px-4 py-3 w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-tiger-500 rounded-none border border-gray-700" />
-            <button class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-6 py-3 transition-colors uppercase tracking-wider text-sm rounded-none">Subscribe</button>
-          </div>
+          <form id="newsletter-subscribe-form" class="flex gap-2" onsubmit="event.preventDefault();">
+            <input
+              type="email"
+              required
+              placeholder="Your email address"
+              aria-label="Your email address"
+              class="bg-gray-800 text-white px-4 py-3 w-full max-w-xs focus:outline-none focus:ring-2 focus:ring-tiger-500 rounded-none border border-gray-700"
+            />
+            <button
+              type="submit"
+              data-cta-track="subscribe"
+              data-cta-source="footer-newsletter"
+              data-cms-text="global.footerButtonLabel"
+              class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-6 py-3 transition-colors uppercase tracking-wider text-sm rounded-none cursor-pointer"
+            >
+              {globalConfig.footerButtonLabel || "Subscribe"}
+            </button>
+          </form>
+          <p id="newsletter-feedback" class="text-xs text-tiger-500 font-bold mt-2" hidden>
+            Thanks for subscribing to Ride The Tiger!
+          </p>
         </div>
         <div class="md:text-right flex flex-col justify-end">
-          <p class="text-gray-400 italic font-serif text-lg">Ride The Tiger. Documenting human creativity in the age of algorithms.</p>
-          <p class="text-gray-600 text-sm mt-4 uppercase tracking-widest">&copy; {new Date().getFullYear()} Ride The Tiger</p>
+          <p data-cms-text="global.footerTagline" class="text-gray-400 italic font-serif text-lg">
+            {globalConfig.footerTagline || "Ride The Tiger. Documenting human creativity in the age of algorithms."}
+          </p>
+          <div class="flex flex-wrap items-center md:justify-end gap-4 mt-4 text-gray-500 text-sm uppercase tracking-widest">
+            <span>&copy; {new Date().getFullYear()} <span data-cms-text="global.copyrightName">{globalConfig.copyrightName || "Ride The Tiger"}</span></span>
+            <span>&middot;</span>
+            <a href="/admin" class="text-gray-500 hover:text-tiger-500 transition-colors text-xs">Contributor Studio (/admin)</a>
+          </div>
         </div>
       </div>
     </footer>
+
+    <!-- Global Live Whole-Site CMS Hydration & Analytics -->
+    <script>
+      const SITE_CONTENT_STORAGE_KEY = "rtt_cms_site_content_v1";
+      const AUTH_SESSION_KEY = "rtt_studio_auth_v1";
+
+      function getByPath(obj: any, pathStr: string): any {
+        if (!obj || !pathStr) return undefined;
+        return pathStr.split(".").reduce((acc, part) => {
+          if (acc === null || acc === undefined) return undefined;
+          return acc[part];
+        }, obj);
+      }
+
+      function applySiteContentToDOM(siteContent: any) {
+        if (!siteContent || typeof siteContent !== "object") return;
+
+        // 1. Update text elements
+        document.querySelectorAll<HTMLElement>("[data-cms-text]").forEach((el) => {
+          const path = el.dataset.cmsText;
+          if (!path) return;
+          const val = getByPath(siteContent, path);
+          if (typeof val === "string" && val.trim().length > 0) {
+            el.textContent = val;
+          }
+        });
+
+        // 2. Update images
+        document.querySelectorAll<HTMLImageElement>("img[data-cms-img]").forEach((img) => {
+          const path = img.dataset.cmsImg;
+          if (!path) return;
+          const val = getByPath(siteContent, path);
+          if (typeof val === "string" && val.trim().length > 0) {
+            img.src = val;
+          }
+        });
+
+        // 3. Update dynamic lists on /about
+        document.querySelectorAll<HTMLUListElement>("ul[data-cms-list]").forEach((ul) => {
+          const path = ul.dataset.cmsList;
+          if (!path) return;
+          const arr = getByPath(siteContent, path);
+          if (!Array.isArray(arr) || arr.length === 0) return;
+          ul.innerHTML = arr
+            .map(
+              (item: any) =>
+                `<li><strong>${item.bold || ""}</strong> ${item.text || ""}</li>`
+            )
+            .join("");
+        });
+
+        // 4. Update SEO metadata in <head> for top-level pages
+        const seo = siteContent.seo;
+        if (seo && typeof seo === "object") {
+          const cleanPath = window.location.pathname.replace(/\/+$/, "") || "/";
+          const pageTitles: Record<string, string | undefined> = {
+            "/": seo.homeTitle,
+            "/interviews": seo.interviewsTitle,
+            "/about": seo.aboutTitle,
+          };
+          const pageDescs: Record<string, string | undefined> = {
+            "/": seo.homeDescription,
+            "/interviews": seo.interviewsDescription,
+            "/about": seo.aboutDescription,
+          };
+          if (pageTitles[cleanPath]) document.title = pageTitles[cleanPath]!;
+          const setMeta = (selector: string, val: string | undefined) => {
+            if (!val) return;
+            const el = document.querySelector<HTMLMetaElement>(selector);
+            if (el) el.setAttribute("content", val);
+          };
+          if (pageDescs[cleanPath]) {
+            setMeta('meta[name="description"]', pageDescs[cleanPath]);
+            setMeta('meta[property="og:description"]', pageDescs[cleanPath]);
+            setMeta('meta[property="twitter:description"]', pageDescs[cleanPath]);
+          }
+        }
+      }
+
+      function initGlobalSiteContentHydration() {
+        // Show "Studio" pill in navbar if signed into /admin
+        try {
+          const authRaw = sessionStorage.getItem(AUTH_SESSION_KEY);
+          const studioPill = document.getElementById("nav-studio-pill");
+          if (authRaw && studioPill) {
+            studioPill.hidden = false;
+          }
+        } catch {
+          // ignore
+        }
+
+        // Newsletter subscribe feedback
+        const subForm = document.getElementById("newsletter-subscribe-form") as HTMLFormElement | null;
+        const subFeedback = document.getElementById("newsletter-feedback");
+        subForm?.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (subFeedback) subFeedback.hidden = false;
+          subForm.reset();
+        });
+
+        if (window.location.pathname.startsWith("/admin")) return;
+
+        let localSiteContent: any = null;
+        try {
+          const raw = localStorage.getItem(SITE_CONTENT_STORAGE_KEY);
+          if (raw) {
+            localSiteContent = JSON.parse(raw);
+            applySiteContentToDOM(localSiteContent);
+          }
+        } catch {
+          // ignore
+        }
+
+        fetch("/__cms-sync", { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data || !data.ok) return;
+            if (data.siteContent && typeof data.siteContent === "object") {
+              localStorage.setItem(
+                SITE_CONTENT_STORAGE_KEY,
+                JSON.stringify(data.siteContent)
+              );
+              applySiteContentToDOM(data.siteContent);
+            } else if (localSiteContent) {
+              fetch("/__cms-sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "sync-site-content",
+                  content: localSiteContent,
+                }),
+              }).catch(() => {});
+            }
+          })
+          .catch(() => {});
+
+        // Record anonymous pageview
+        fetch("/__cms-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "record-analytics",
+            eventType: "page_view",
+            page: window.location.pathname,
+          }),
+        }).catch(() => {});
+      }
+
+      initGlobalSiteContentHydration();
+      document.addEventListener("astro:page-load", initGlobalSiteContentHydration);
+
+      // Forward Netlify Identity tokens to /admin
+      if (
+        window.location.pathname !== "/admin" &&
+        window.location.hash &&
+        /(invite_token|confirmation_token|recovery_token|access_token)=/.test(
+          window.location.hash
+        )
+      ) {
+        window.location.replace(`/admin${window.location.hash}`);
+      }
+    </script>
   </body>
 </html>

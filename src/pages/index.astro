@@ -1,17 +1,21 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import siteContent from '../data/site-content.json';
+
+const home = siteContent.home || {};
+const themes = Array.isArray(home.themes) ? home.themes : [];
 
 const schema = {
   "@context": "https://schema.org",
   "@graph": [
     {
       "@type": "WebSite",
-      "name": "Ride The Tiger",
+      "name": siteContent.seo?.siteName || "Ride The Tiger",
       "url": (Astro.site || Astro.url.origin).toString()
     },
     {
       "@type": "Organization",
-      "name": "Ride The Tiger",
+      "name": siteContent.seo?.siteName || "Ride The Tiger",
       "url": (Astro.site || Astro.url.origin).toString(),
       "logo": new URL("/favicon.svg", Astro.site || Astro.url.origin).toString()
     }
@@ -19,58 +23,97 @@ const schema = {
 };
 ---
 
-<Layout title="Ride The Tiger | Editorial Series on Creative Survival" schema={schema}>
+<Layout title={siteContent.seo?.homeTitle || "Ride The Tiger | Editorial Series on Creative Survival"} schema={schema}>
   <!-- Hero Section -->
   <section class="container mx-auto px-6 max-w-5xl py-20 lg:py-32">
-    <div class="mb-4 inline-block bg-charcoal text-tiger-500 font-bold uppercase tracking-widest text-xs px-3 py-1">
-      An Editorial Series on Creative Survival
+    <div
+      data-cms-text="home.badge"
+      class="mb-4 inline-block bg-charcoal text-tiger-500 font-bold uppercase tracking-widest text-xs px-3 py-1"
+    >
+      {home.badge || "An Editorial Series on Creative Survival"}
     </div>
     <h1 class="text-6xl md:text-8xl font-black tracking-tighter uppercase leading-[0.9] mb-8">
-      Stop fighting<br/>the machine.<br/>
-      <span class="text-tiger-600">Learn to ride<br/>the tiger.</span>
+      <span data-cms-text="home.heroHeadingLine1" class="block">
+        {home.heroHeadingLine1 || "Stop fighting the machine."}
+      </span>
+      <span data-cms-text="home.heroHeadingHighlight" class="text-tiger-600 block mt-1">
+        {home.heroHeadingHighlight || "Learn to ride the tiger."}
+      </span>
     </h1>
-    <p class="text-xl md:text-2xl text-gray-700 max-w-2xl leading-relaxed mb-10">
-      Candid, unfiltered conversations with copywriters, designers, and agency leaders navigating the real impact of AI on craft, commerce, and the creative psyche.
+    <p
+      data-cms-text="home.heroSub"
+      class="text-xl md:text-2xl text-gray-700 max-w-2xl leading-relaxed mb-10"
+    >
+      {home.heroSub || "Candid, unfiltered conversations with copywriters, designers, and agency leaders navigating the real impact of AI on craft, commerce, and the creative psyche."}
     </p>
     <div class="flex flex-wrap gap-4">
-      <a href="/interviews" class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-8 py-4 uppercase tracking-wider transition-colors">Read the Interviews</a>
-      <a href="/about" class="border-2 border-charcoal hover:bg-charcoal hover:text-offwhite text-charcoal font-bold px-8 py-4 uppercase tracking-wider transition-colors">About the Project</a>
+      <a
+        href="/interviews"
+        data-cms-text="home.primaryCtaLabel"
+        class="bg-tiger-500 hover:bg-tiger-600 text-charcoal font-bold px-8 py-4 uppercase tracking-wider transition-colors"
+      >
+        {home.primaryCtaLabel || "Read the Interviews"}
+      </a>
+      <a
+        href="/about"
+        data-cms-text="home.secondaryCtaLabel"
+        class="border-2 border-charcoal hover:bg-charcoal hover:text-offwhite text-charcoal font-bold px-8 py-4 uppercase tracking-wider transition-colors"
+      >
+        {home.secondaryCtaLabel || "About the Project"}
+      </a>
     </div>
   </section>
 
   <!-- Pull Quote Banner -->
   <section class="bg-charcoal text-offwhite py-20 border-y-4 border-tiger-500 relative z-10 shadow-xl">
     <div class="container mx-auto px-6 max-w-4xl text-center">
-      <blockquote class="text-3xl md:text-5xl font-serif italic leading-tight text-tiger-500">
-        "The creative industry is stuck in a dead-end debate between doom-mongering Luddites and breathless tech evangelists. We document what's actually happening in the messy middle."
+      <blockquote
+        data-cms-text="home.pullQuote"
+        class="text-3xl md:text-5xl font-serif italic leading-tight text-tiger-500"
+      >
+        {home.pullQuote || '"The creative industry is stuck in a dead-end debate between doom-mongering Luddites and breathless tech evangelists. We document what\'s actually happening in the messy middle."'}
       </blockquote>
     </div>
   </section>
 
   <!-- Four Core Themes with Parallax -->
   <section class="container mx-auto px-6 max-w-5xl py-32 overflow-clip relative z-0">
-    <h2 class="text-4xl font-bold uppercase tracking-tighter mb-16 text-center">The Four Questions We Ask Everyone</h2>
+    <h2
+      data-cms-text="home.themesHeading"
+      class="text-4xl font-bold uppercase tracking-tighter mb-16 text-center"
+    >
+      {home.themesHeading || "The Four Questions We Ask Everyone"}
+    </h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8 parallax-wrapper pb-16">
-      <div class="border border-gray-200 p-10 hover:border-tiger-500 transition-colors bg-white shadow-sm parallax-layer" style="--parallax-offset: 80px">
-        <h3 class="text-2xl font-bold uppercase tracking-tight mb-4">1. The Bleed <span class="text-gray-400 font-normal lowercase">(Where AI Kills)</span></h3>
-        <p class="text-gray-700 leading-relaxed text-lg">The lost billable hours, commoditized skills, and creative compromises no one wants to admit out loud.</p>
-      </div>
-      <div class="border border-gray-200 p-10 hover:border-tiger-500 transition-colors bg-white shadow-sm parallax-layer" style="--parallax-offset: 160px">
-        <h3 class="text-2xl font-bold uppercase tracking-tight mb-4">2. The Leverage <span class="text-gray-400 font-normal lowercase">(Where AI Empowers)</span></h3>
-        <p class="text-gray-700 leading-relaxed text-lg">The tactical workflows, secret speed runs, and superpower tools making creatives faster and bolder.</p>
-      </div>
-      <div class="border border-gray-200 p-10 hover:border-tiger-500 transition-colors bg-white shadow-sm parallax-layer" style="--parallax-offset: 240px">
-        <h3 class="text-2xl font-bold uppercase tracking-tight mb-4">3. The Horizon <span class="text-gray-400 font-normal lowercase">(Where Craft Goes Next)</span></h3>
-        <p class="text-gray-700 leading-relaxed text-lg">Honest, hype-free projections on how brand storytelling, design, and commercial creative work are shifting.</p>
-      </div>
-      <div class="border border-gray-200 p-10 hover:border-tiger-500 transition-colors bg-white shadow-sm parallax-layer" style="--parallax-offset: 320px">
-        <h3 class="text-2xl font-bold uppercase tracking-tight mb-4">4. The Psyche <span class="text-gray-400 font-normal lowercase">(How It Feels)</span></h3>
-        <p class="text-gray-700 leading-relaxed text-lg">Beyond the bottom line—tackling burnout, identity crises, and rediscovering joy in human expression.</p>
-      </div>
+      {themes.map((theme, idx) => (
+        <div
+          class="border border-gray-200 p-10 hover:border-tiger-500 transition-colors bg-white shadow-sm parallax-layer"
+          style={`--parallax-offset: ${(idx + 1) * 80}px`}
+        >
+          <h3 class="text-2xl font-bold uppercase tracking-tight mb-4">
+            <span data-cms-text={`home.themes.${idx}.title`}>{theme.title}</span>{" "}
+            <span data-cms-text={`home.themes.${idx}.subtitle`} class="text-gray-400 font-normal lowercase">
+              {theme.subtitle}
+            </span>
+          </h3>
+          <p
+            data-cms-text={`home.themes.${idx}.description`}
+            class="text-gray-700 leading-relaxed text-lg"
+          >
+            {theme.description}
+          </p>
+        </div>
+      ))}
     </div>
     
     <div class="mt-8 text-center parallax-layer" style="--parallax-offset: 50px">
-      <a href="/interviews" class="inline-block bg-tiger-500 hover:bg-tiger-600 text-[var(--color-charcoal)] font-bold px-10 py-5 uppercase tracking-wider transition-colors shadow-lg">Read the Interviews</a>
+      <a
+        href="/interviews"
+        data-cms-text="home.bottomCtaLabel"
+        class="inline-block bg-tiger-500 hover:bg-tiger-600 text-[var(--color-charcoal)] font-bold px-10 py-5 uppercase tracking-wider transition-colors shadow-lg"
+      >
+        {home.bottomCtaLabel || "Read the Interviews"}
+      </a>
     </div>
   </section>
 </Layout>
