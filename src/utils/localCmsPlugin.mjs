@@ -62,6 +62,9 @@ function serializeInterviewToMarkdown(item) {
       lines.push(
         `    percentage: ${Math.max(0, Math.min(100, Math.round(Number(img.percentage) ?? 50)))}`
       );
+      if (img.afterText) {
+        lines.push(`    afterText: "${esc(img.afterText)}"`);
+      }
     }
   }
 

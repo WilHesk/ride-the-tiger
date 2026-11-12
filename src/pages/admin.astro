@@ -783,15 +783,15 @@ const imageChoices = [
                   ></textarea>
                 </div>
 
-                <!-- 3. INLINE ARTICLE IMAGES WITH PERCENTAGE PLACEMENT (0% - 100%) -->
+                <!-- 3. INLINE ARTICLE IMAGES WITH SENTENCE OR PERCENTAGE PLACEMENT -->
                 <div class="p-5 bg-gray-50 border-2 border-charcoal space-y-4">
                   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-300 pb-3">
                     <div>
                       <h3 class="text-lg font-black uppercase tracking-tight text-charcoal m-0">
-                        3. Inline Article Images &amp; Percentage Placement (0% &ndash; 100%)
+                        3. Inline Article Images &mdash; Place After Sentence or by Percentage (0% &ndash; 100%)
                       </h3>
                       <p class="text-xs text-gray-600 m-0 mt-0.5">
-                        Add images to insert automatically inside the article copy. Set a <strong>percentage (0%&ndash;100%)</strong> on each image to dictate how far through the article it appears (e.g. <strong>25%</strong> = quarter of the way down, <strong>50%</strong> = halfway through, <strong>80%</strong> = near the end).
+                        Add images to insert inside the article copy. For each image, either <strong>type/paste the sentence it should come after</strong> OR set a <strong>percentage (0%&ndash;100%)</strong> to dictate how far through the article it appears.
                       </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
@@ -1047,6 +1047,7 @@ const imageChoices = [
   import {
     renderMarkdownWithInlineImages,
     getPercentageInsertionPreview,
+    parseMarkdownBlocks,
     escapeHtml,
     type InlineImageItem,
   } from "../utils/articleRenderer";
@@ -1515,15 +1516,35 @@ const imageChoices = [
           activeInlineImages
         );
       }
-      // Also refresh the paragraph context labels on each inline image card
+      // Also refresh the paragraph context labels and percentage badges on each inline image card
       document
         .querySelectorAll<HTMLElement>("[data-inline-context-idx]")
         .forEach((el) => {
           const idx = Number(el.dataset.inlineContextIdx);
           const item = activeInlineImages[idx];
           if (item) {
-            const info = getPercentageInsertionPreview(bodyVal, item.percentage);
+            const info = getPercentageInsertionPreview(
+              bodyVal,
+              item.percentage,
+              item.afterText
+            );
             el.textContent = info.contextLabel;
+            el.className =
+              info.matchedBy === "sentence"
+                ? "text-xs text-emerald-900 font-semibold m-0 bg-emerald-50 p-2 border-l-4 border-emerald-600"
+                : info.sentenceNotFound
+                  ? "text-xs text-amber-900 font-semibold m-0 bg-amber-50 p-2 border-l-4 border-amber-500"
+                  : "text-xs text-gray-700 font-medium m-0 bg-white p-2 border-l-4 border-tiger-500";
+
+            const badgeEl = inlineListEl?.querySelector<HTMLElement>(
+              `[data-inline-pct-badge="${idx}"]`
+            );
+            if (badgeEl) {
+              badgeEl.textContent =
+                info.matchedBy === "sentence"
+                  ? `after matched sentence (~${info.effectivePercentage}%)`
+                  : `at ${info.percentage}%`;
+            }
           }
         });
     }
@@ -1531,21 +1552,50 @@ const imageChoices = [
     function renderInlineImagesEditor() {
       if (!inlineListEl) return;
       const bodyVal = bodyInput?.value || "";
+      const parsedBlocks = parseMarkdownBlocks(bodyVal);
 
       if (activeInlineImages.length === 0) {
         inlineListEl.innerHTML = `
           <div class="p-6 bg-white border border-dashed border-gray-400 text-center text-sm text-gray-500">
-            No inline images added to this article yet. Upload images above or import from a Google Docs folder to place images at any percentage (0%&ndash;100%) through the article.
+            No inline images added to this article yet. Upload images above or import from a Google Docs folder to place images after a specific sentence or at any percentage (0%&ndash;100%) through the article.
           </div>
         `;
         updateLiveArticlePreview();
         return;
       }
 
+      const sentenceOptionsHtml = parsedBlocks
+        .filter((b) => !b.isRule && b.plainText.trim().length > 0)
+        .map((b, bIdx) => {
+          const clean = b.plainText.replace(/\s+/g, " ").trim();
+          const label =
+            clean.length > 90
+              ? `¶${bIdx + 1}: ${clean.slice(0, 90)}…`
+              : `¶${bIdx + 1}: ${clean}`;
+          return `<option value="${escapeHtml(clean)}">${escapeHtml(label)}</option>`;
+        })
+        .join("");
+
       inlineListEl.innerHTML = activeInlineImages
         .map((item, idx) => {
           const pct = Math.max(0, Math.min(100, Math.round(Number(item.percentage) ?? 50)));
-          const previewInfo = getPercentageInsertionPreview(bodyVal, pct);
+          const afterTextVal = String(item.afterText || "");
+          const previewInfo = getPercentageInsertionPreview(
+            bodyVal,
+            pct,
+            afterTextVal
+          );
+          const statusText =
+            previewInfo.matchedBy === "sentence"
+              ? `after matched sentence (~${previewInfo.effectivePercentage}%)`
+              : `at ${pct}%`;
+          const contextBoxClass =
+            previewInfo.matchedBy === "sentence"
+              ? "text-xs text-emerald-900 font-semibold m-0 bg-emerald-50 p-2 border-l-4 border-emerald-600"
+              : previewInfo.sentenceNotFound
+                ? "text-xs text-amber-900 font-semibold m-0 bg-amber-50 p-2 border-l-4 border-amber-500"
+                : "text-xs text-gray-700 font-medium m-0 bg-white p-2 border-l-4 border-tiger-500";
+
           return `
             <div class="p-4 bg-white border-2 border-charcoal space-y-3" data-inline-card="${idx}">
               <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-2">
@@ -1554,7 +1604,7 @@ const imageChoices = [
                     Inline Image #${idx + 1}
                   </span>
                   <span class="text-xs font-bold text-charcoal">
-                    Appears at <strong class="text-tiger-600" data-inline-pct-badge="${idx}">${pct}%</strong> of article
+                    Appears <strong class="text-tiger-600" data-inline-pct-badge="${idx}">${escapeHtml(statusText)}</strong> of article
                   </span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -1588,41 +1638,80 @@ const imageChoices = [
                 </div>
 
                 <div class="md:col-span-8 space-y-3">
-                  <!-- PERCENTAGE CONTROL (SLIDER + NUMBER INPUT) -->
-                  <div class="p-3 bg-gray-50 border border-gray-300 space-y-2">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                      <label class="text-xs font-black uppercase tracking-wider text-charcoal">
-                        Position in Article (%) — 0% (Start) to 100% (End)
-                      </label>
-                      <div class="flex items-center gap-1">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="1"
-                          value="${pct}"
-                          data-inline-pct-num="${idx}"
-                          aria-label="Position percentage in article"
-                          class="w-20 px-2.5 py-1 border-2 border-charcoal bg-white text-charcoal font-black text-sm text-center"
-                        />
-                        <span class="text-sm font-black text-charcoal">%</span>
+                  <!-- PLACEMENT CONTROLS: SENTENCE MATCH OR PERCENTAGE (0% - 100%) -->
+                  <div class="p-3 bg-gray-50 border border-gray-300 space-y-3">
+                    <!-- Option A: Type / Paste the sentence it should come after -->
+                    <div class="space-y-1.5">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <label class="text-xs font-black uppercase tracking-wider text-charcoal">
+                          Option A: Place After Specific Sentence / Phrase
+                        </label>
+                        <button
+                          type="button"
+                          data-clear-after-text="${idx}"
+                          class="text-[11px] font-bold text-gray-500 hover:text-charcoal underline cursor-pointer"
+                        >
+                          Clear sentence (use % only)
+                        </button>
                       </div>
+                      <input
+                        type="text"
+                        value="${escapeHtml(afterTextVal)}"
+                        data-inline-after-text="${idx}"
+                        placeholder="Type or paste the sentence (or phrase) this image should appear right after..."
+                        class="w-full px-3 py-2 border-2 border-charcoal bg-white text-charcoal text-xs font-medium"
+                      />
+                      ${
+                        sentenceOptionsHtml
+                          ? `
+                        <select
+                          data-inline-sentence-picker="${idx}"
+                          class="w-full px-2.5 py-1.5 border border-gray-300 bg-white text-gray-700 text-xs"
+                        >
+                          <option value="">— Or quick-pick a paragraph / sentence from the article —</option>
+                          ${sentenceOptionsHtml}
+                        </select>
+                      `
+                          : ""
+                      }
                     </div>
 
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value="${pct}"
-                      data-inline-pct-range="${idx}"
-                      aria-label="Slide to adjust percentage position in article"
-                      class="w-full accent-[var(--color-tiger-500)] cursor-pointer"
-                    />
+                    <!-- Option B: Percentage Slider + Number Input -->
+                    <div class="pt-2 border-t border-gray-200 space-y-1.5">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <label class="text-xs font-black uppercase tracking-wider text-charcoal">
+                          Option B: Position by Percentage (%) — 0% (Start) to 100% (End)
+                        </label>
+                        <div class="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value="${pct}"
+                            data-inline-pct-num="${idx}"
+                            aria-label="Position percentage in article"
+                            class="w-20 px-2.5 py-1 border-2 border-charcoal bg-white text-charcoal font-black text-sm text-center"
+                          />
+                          <span class="text-sm font-black text-charcoal">%</span>
+                        </div>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value="${pct}"
+                        data-inline-pct-range="${idx}"
+                        aria-label="Slide to adjust percentage position in article"
+                        class="w-full accent-[var(--color-tiger-500)] cursor-pointer"
+                      />
+                    </div>
 
                     <p
                       data-inline-context-idx="${idx}"
-                      class="text-xs text-gray-700 font-medium m-0 bg-white p-2 border-l-4 border-tiger-500"
+                      class="${contextBoxClass}"
                     >
                       ${escapeHtml(previewInfo.contextLabel)}
                     </p>
@@ -1676,7 +1765,85 @@ const imageChoices = [
         })
         .join("");
 
-      // Wire events for percentage sliders, number inputs, fields, remove, and swap-with-cover
+      // Wire events for sentence input, sentence picker, clear button, percentage sliders, number inputs, fields, remove, and swap-with-cover
+      inlineListEl
+        .querySelectorAll<HTMLInputElement>("[data-inline-after-text]")
+        .forEach((sentenceInput) => {
+          sentenceInput.addEventListener("input", () => {
+            const idx = Number(sentenceInput.dataset.inlineAfterText);
+            const val = sentenceInput.value;
+            activeInlineImages[idx].afterText = val;
+
+            // If matched, also sync the percentage slider & number box to the matched paragraph's %
+            const currentBody = bodyInput?.value || "";
+            const info = getPercentageInsertionPreview(
+              currentBody,
+              activeInlineImages[idx].percentage,
+              val
+            );
+            if (info.matchedBy === "sentence") {
+              activeInlineImages[idx].percentage = info.effectivePercentage;
+              const numEl = inlineListEl.querySelector<HTMLInputElement>(
+                `[data-inline-pct-num="${idx}"]`
+              );
+              if (numEl) numEl.value = String(info.effectivePercentage);
+              const rangeEl = inlineListEl.querySelector<HTMLInputElement>(
+                `[data-inline-pct-range="${idx}"]`
+              );
+              if (rangeEl) rangeEl.value = String(info.effectivePercentage);
+            }
+            updateLiveArticlePreview();
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLSelectElement>("[data-inline-sentence-picker]")
+        .forEach((picker) => {
+          picker.addEventListener("change", () => {
+            const idx = Number(picker.dataset.inlineSentencePicker);
+            if (!picker.value) return;
+            activeInlineImages[idx].afterText = picker.value;
+            const textEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-after-text="${idx}"]`
+            );
+            if (textEl) textEl.value = picker.value;
+
+            const currentBody = bodyInput?.value || "";
+            const info = getPercentageInsertionPreview(
+              currentBody,
+              activeInlineImages[idx].percentage,
+              picker.value
+            );
+            if (info.matchedBy === "sentence") {
+              activeInlineImages[idx].percentage = info.effectivePercentage;
+              const numEl = inlineListEl.querySelector<HTMLInputElement>(
+                `[data-inline-pct-num="${idx}"]`
+              );
+              if (numEl) numEl.value = String(info.effectivePercentage);
+              const rangeEl = inlineListEl.querySelector<HTMLInputElement>(
+                `[data-inline-pct-range="${idx}"]`
+              );
+              if (rangeEl) rangeEl.value = String(info.effectivePercentage);
+            }
+            picker.value = "";
+            updateLiveArticlePreview();
+          });
+        });
+
+      inlineListEl
+        .querySelectorAll<HTMLButtonElement>("[data-clear-after-text]")
+        .forEach((clearBtn) => {
+          clearBtn.addEventListener("click", () => {
+            const idx = Number(clearBtn.dataset.clearAfterText);
+            activeInlineImages[idx].afterText = "";
+            const textEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-after-text="${idx}"]`
+            );
+            if (textEl) textEl.value = "";
+            updateLiveArticlePreview();
+          });
+        });
+
       inlineListEl
         .querySelectorAll<HTMLInputElement>("[data-inline-pct-range]")
         .forEach((rangeInput) => {
@@ -1684,14 +1851,15 @@ const imageChoices = [
             const idx = Number(rangeInput.dataset.inlinePctRange);
             const val = Math.max(0, Math.min(100, Number(rangeInput.value) || 0));
             activeInlineImages[idx].percentage = val;
+            activeInlineImages[idx].afterText = "";
+            const textEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-after-text="${idx}"]`
+            );
+            if (textEl) textEl.value = "";
             const numEl = inlineListEl.querySelector<HTMLInputElement>(
               `[data-inline-pct-num="${idx}"]`
             );
             if (numEl) numEl.value = String(val);
-            const badgeEl = inlineListEl.querySelector<HTMLElement>(
-              `[data-inline-pct-badge="${idx}"]`
-            );
-            if (badgeEl) badgeEl.textContent = `${val}%`;
             updateLiveArticlePreview();
           });
         });
@@ -1703,14 +1871,15 @@ const imageChoices = [
             const idx = Number(numInput.dataset.inlinePctNum);
             const val = Math.max(0, Math.min(100, Number(numInput.value) || 0));
             activeInlineImages[idx].percentage = val;
+            activeInlineImages[idx].afterText = "";
+            const textEl = inlineListEl.querySelector<HTMLInputElement>(
+              `[data-inline-after-text="${idx}"]`
+            );
+            if (textEl) textEl.value = "";
             const rangeEl = inlineListEl.querySelector<HTMLInputElement>(
               `[data-inline-pct-range="${idx}"]`
             );
             if (rangeEl) rangeEl.value = String(val);
-            const badgeEl = inlineListEl.querySelector<HTMLElement>(
-              `[data-inline-pct-badge="${idx}"]`
-            );
-            if (badgeEl) badgeEl.textContent = `${val}%`;
             updateLiveArticlePreview();
           });
         });

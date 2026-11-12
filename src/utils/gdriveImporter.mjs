@@ -431,17 +431,25 @@ export function parseInterviewCopyAndAssets({
     paragraphs.shift();
   }
 
-  // 3. Format standalone short subheadings as ### Subheading and look for inline percentage markers
+  // 3. Format standalone short subheadings as ### Subheading and look for inline percentage or sentence markers
   const inlineMarkers = [];
+  const inlineAfterTexts = [];
   const formattedParagraphs = [];
 
   for (let i = 0; i < paragraphs.length; i++) {
     const p = paragraphs[i];
 
-    // Check if paragraph is an explicit inline image marker like [image: 40%] or [photo: 65%]
-    const markerMatch = p.match(/^\[(?:image|photo|img)\s*(?:\d+)?\s*:?\s*(\d{1,3})%?\]$/i);
+    // Check if paragraph is an explicit inline image marker like [image: 40%], [photo: 65%], or bare [image]
+    const markerMatch = p.match(/^\[(?:image|photo|img)\s*(?:\d+)?\s*:?\s*(?:(\d{1,3})%?)?\]$/i);
     if (markerMatch) {
-      inlineMarkers.push(Math.max(0, Math.min(100, parseInt(markerMatch[1], 10))));
+      if (markerMatch[1]) {
+        inlineMarkers.push(Math.max(0, Math.min(100, parseInt(markerMatch[1], 10))));
+        inlineAfterTexts.push("");
+      } else {
+        const prevPara = formattedParagraphs[formattedParagraphs.length - 1] || "";
+        inlineMarkers.push(null);
+        inlineAfterTexts.push(prevPara.replace(/^#+\s*/, "").trim());
+      }
       continue;
     }
 
@@ -578,6 +586,7 @@ export function parseInterviewCopyAndAssets({
         alt: filenameToAlt(img.name, meta.interviewee),
         caption: "",
         percentage: explicitPct,
+        afterText: inlineAfterTexts[idx] || "",
       });
     });
   } else {

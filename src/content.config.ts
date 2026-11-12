@@ -6,6 +6,7 @@ const inlineImageSchema = z.object({
   alt: z.string().optional().default(''),
   caption: z.string().optional().default(''),
   percentage: z.number().min(0).max(100).default(50),
+  afterText: z.string().optional().default(''),
 });
 
 const interviewsCollection = defineCollection({

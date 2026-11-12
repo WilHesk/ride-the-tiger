@@ -3,6 +3,7 @@ export interface InlineImageItem {
   alt?: string;
   caption?: string;
   percentage: number;
+  afterText?: string;
 }
 
 export function escapeHtml(val: unknown): string {
@@ -131,6 +132,80 @@ function buildSingleBlock(chunk: string): ParsedArticleBlock {
   };
 }
 
+function normalizeForSentenceSearch(input: string): string {
+  return String(input || "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,4}\s+/gm, "")
+    .replace(/[\u2018\u2019\u201A\u201B`']/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F"]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\*\*|\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function stripPunctuationForLooseMatch(input: string): string {
+  return normalizeForSentenceSearch(input)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Finds the 0-based block index that contains the user's target sentence/phrase,
+ * or -1 if not found.
+ */
+export function findBlockIndexForSentence(
+  blocks: ParsedArticleBlock[],
+  afterText?: string
+): number {
+  const rawQuery = String(afterText || "").trim();
+  if (!rawQuery || blocks.length === 0) return -1;
+
+  const normQuery = normalizeForSentenceSearch(rawQuery);
+  if (!normQuery) return -1;
+
+  // Pass 1: Normalized substring match (preserves punctuation, normalizes smart quotes & links)
+  for (let i = 0; i < blocks.length; i++) {
+    const normBlock = normalizeForSentenceSearch(blocks[i].plainText);
+    if (normBlock.includes(normQuery)) {
+      return i;
+    }
+  }
+
+  // Pass 2: Punctuation-tolerant match (handles differences in quotes, trailing periods, etc.)
+  const looseQuery = stripPunctuationForLooseMatch(rawQuery);
+  if (looseQuery.length >= 3) {
+    for (let i = 0; i < blocks.length; i++) {
+      const looseBlock = stripPunctuationForLooseMatch(blocks[i].plainText);
+      if (looseBlock.includes(looseQuery)) {
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
+export function computePercentageForSlot(
+  blocks: ParsedArticleBlock[],
+  slotIndex: number
+): number {
+  const n = blocks.length;
+  if (n === 0 || slotIndex <= 0) return 0;
+  if (slotIndex >= n) return 100;
+
+  const totalWords = blocks.reduce((acc, b) => acc + b.wordCount, 0);
+  if (totalWords <= 0) return 50;
+
+  let cumulative = 0;
+  for (let i = 0; i < Math.min(slotIndex, n); i++) {
+    cumulative += blocks[i].wordCount;
+  }
+  return Math.max(0, Math.min(100, Math.round((cumulative / totalWords) * 100)));
+}
+
 /**
  * Computes which slot index (0 .. blocks.length) corresponds to a given percentage (0..100).
  * Slot 0 = before block 0; Slot k = after block k-1; Slot blocks.length = after final block.
@@ -171,13 +246,50 @@ export function computeSlotForPercentage(
   return bestSlot;
 }
 
+export function computeSlotForInlineImage(
+  blocks: ParsedArticleBlock[],
+  item: { percentage?: number; afterText?: string }
+): {
+  slotIndex: number;
+  matchedBy: "sentence" | "percentage";
+  sentenceNotFound: boolean;
+  effectivePercentage: number;
+} {
+  const hasAfterText = String(item?.afterText || "").trim().length > 0;
+  if (hasAfterText) {
+    const matchedIdx = findBlockIndexForSentence(blocks, item.afterText);
+    if (matchedIdx !== -1) {
+      const slotIndex = matchedIdx + 1;
+      return {
+        slotIndex,
+        matchedBy: "sentence",
+        sentenceNotFound: false,
+        effectivePercentage: computePercentageForSlot(blocks, slotIndex),
+      };
+    }
+  }
+
+  const clampedPct = Math.max(0, Math.min(100, Math.round(Number(item?.percentage) ?? 50)));
+  const slotIndex = computeSlotForPercentage(blocks, clampedPct);
+  return {
+    slotIndex,
+    matchedBy: "percentage",
+    sentenceNotFound: hasAfterText,
+    effectivePercentage: clampedPct,
+  };
+}
+
 export function getPercentageInsertionPreview(
   markdown: string,
-  percentage: number
+  percentage: number,
+  afterText?: string
 ): {
   percentage: number;
+  effectivePercentage: number;
   slotIndex: number;
   totalBlocks: number;
+  matchedBy: "sentence" | "percentage";
+  sentenceNotFound: boolean;
   contextLabel: string;
 } {
   const blocks = parseMarkdownBlocks(markdown);
@@ -185,20 +297,49 @@ export function getPercentageInsertionPreview(
   if (blocks.length === 0) {
     return {
       percentage: clamped,
+      effectivePercentage: clamped,
       slotIndex: 0,
       totalBlocks: 0,
+      matchedBy: "percentage",
+      sentenceNotFound: false,
       contextLabel: "Add copy above to preview exact paragraph placement.",
     };
   }
 
-  const slot = computeSlotForPercentage(blocks, clamped);
+  const resolution = computeSlotForInlineImage(blocks, {
+    percentage: clamped,
+    afterText,
+  });
+  const slot = resolution.slotIndex;
+
+  if (resolution.matchedBy === "sentence" && slot > 0 && slot <= blocks.length) {
+    const matchedBlock = blocks[slot - 1];
+    const snippet = matchedBlock.plainText.slice(0, 95);
+    return {
+      percentage: clamped,
+      effectivePercentage: resolution.effectivePercentage,
+      slotIndex: slot,
+      totalBlocks: blocks.length,
+      matchedBy: "sentence",
+      sentenceNotFound: false,
+      contextLabel: `✓ Matched sentence (after paragraph ${slot} of ${blocks.length}, ~${resolution.effectivePercentage}% through article): “${snippet}${matchedBlock.plainText.length > 95 ? "…" : ""}”`,
+    };
+  }
+
+  const notFoundPrefix = resolution.sentenceNotFound
+    ? "⚠ Sentence not found in copy (using % fallback) — "
+    : "";
+
   if (slot <= 0) {
     const firstText = blocks[0].plainText.slice(0, 85);
     return {
       percentage: clamped,
+      effectivePercentage: 0,
       slotIndex: 0,
       totalBlocks: blocks.length,
-      contextLabel: `At top of article body — before: “${firstText}${blocks[0].plainText.length > 85 ? "…" : ""}”`,
+      matchedBy: "percentage",
+      sentenceNotFound: resolution.sentenceNotFound,
+      contextLabel: `${notFoundPrefix}At top of article body — before: “${firstText}${blocks[0].plainText.length > 85 ? "…" : ""}”`,
     };
   }
 
@@ -207,9 +348,12 @@ export function getPercentageInsertionPreview(
     const lastText = lastBlock.plainText.slice(0, 85);
     return {
       percentage: clamped,
+      effectivePercentage: 100,
       slotIndex: blocks.length,
       totalBlocks: blocks.length,
-      contextLabel: `At end of article (${clamped}%) — after: “${lastText}${lastBlock.plainText.length > 85 ? "…" : ""}”`,
+      matchedBy: "percentage",
+      sentenceNotFound: resolution.sentenceNotFound,
+      contextLabel: `${notFoundPrefix}At end of article (${clamped}%) — after: “${lastText}${lastBlock.plainText.length > 85 ? "…" : ""}”`,
     };
   }
 
@@ -217,9 +361,12 @@ export function getPercentageInsertionPreview(
   const snippet = prevBlock.plainText.slice(0, 90);
   return {
     percentage: clamped,
+    effectivePercentage: clamped,
     slotIndex: slot,
     totalBlocks: blocks.length,
-    contextLabel: `${clamped}% through article (after paragraph ${slot} of ${blocks.length}): “${snippet}${prevBlock.plainText.length > 90 ? "…" : ""}”`,
+    matchedBy: "percentage",
+    sentenceNotFound: resolution.sentenceNotFound,
+    contextLabel: `${notFoundPrefix}${clamped}% through article (after paragraph ${slot} of ${blocks.length}): “${snippet}${prevBlock.plainText.length > 90 ? "…" : ""}”`,
   };
 }
 
@@ -253,20 +400,35 @@ export function renderMarkdownWithInlineImages(
         .map((img) => ({
           ...img,
           percentage: Math.max(0, Math.min(100, Number(img.percentage) ?? 50)),
+          afterText: String(img.afterText || "").trim(),
         }))
-        .sort((a, b) => a.percentage - b.percentage)
     : [];
 
   if (blocks.length === 0) {
     return validImages.map(renderInlineFigureHtml).join("\n");
   }
 
+  const resolvedWithSlots = validImages
+    .map((img, originalIdx) => {
+      const res = computeSlotForInlineImage(blocks, img);
+      return {
+        img,
+        slot: res.slotIndex,
+        effectivePct: res.effectivePercentage,
+        originalIdx,
+      };
+    })
+    .sort((a, b) => {
+      if (a.slot !== b.slot) return a.slot - b.slot;
+      if (a.effectivePct !== b.effectivePct) return a.effectivePct - b.effectivePct;
+      return a.originalIdx - b.originalIdx;
+    });
+
   const slotMap = new Map<number, InlineImageItem[]>();
-  for (const img of validImages) {
-    const slot = computeSlotForPercentage(blocks, img.percentage);
-    const list = slotMap.get(slot) || [];
-    list.push(img);
-    slotMap.set(slot, list);
+  for (const entry of resolvedWithSlots) {
+    const list = slotMap.get(entry.slot) || [];
+    list.push(entry.img);
+    slotMap.set(entry.slot, list);
   }
 
   const out: string[] = [];
