@@ -14,26 +14,32 @@ async function run() {
     fs.mkdirSync(audioOutDir, { recursive: true });
   }
 
-  const files = fs
+  const entries = fs
     .readdirSync(interviewsDir)
     .filter((f) => f.endsWith(".md"))
-    .sort();
+    .map((file) => {
+      const slug = file.replace(/\.md$/, "");
+      const fullPath = path.join(interviewsDir, file);
+      const raw = fs.readFileSync(fullPath, "utf-8");
+      const bodyMatch = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+      const body = bodyMatch ? bodyMatch[1].trim() : raw.trim();
+      return { file, slug, body };
+    })
+    .sort((a, b) => a.body.length - b.body.length);
 
-  for (const file of files) {
-    const slug = file.replace(/\.md$/, "");
-    const fullPath = path.join(interviewsDir, file);
-    const raw = fs.readFileSync(fullPath, "utf-8");
+  for (const { slug, body } of entries) {
+    const outPath = path.join(audioOutDir, `${slug}.mp3`);
+    // Skip cecilie-conradsen if already generated with ElevenLabs (>6 MB)
+    if (slug === "cecilie-conradsen" && fs.existsSync(outPath) && fs.statSync(outPath).size > 6000000) {
+      console.log(`✓ Keeping existing ElevenLabs studio narration for ${slug}`);
+      continue;
+    }
 
-    // Extract body after frontmatter (--- ... ---)
-    const bodyMatch = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
-    const body = bodyMatch ? bodyMatch[1].trim() : raw.trim();
-
-    console.log(`Generating UK Female narration for ${slug}...`);
+    console.log(`Generating UK Female narration for ${slug} (${body.length} chars)...`);
     const { buffer, engine, voice } = await generateArticleNarrationMp3(
       body,
       DEFAULT_TTS_VOICE
     );
-    const outPath = path.join(audioOutDir, `${slug}.mp3`);
     fs.writeFileSync(outPath, buffer);
     console.log(
       `✓ Saved ${outPath} (${(buffer.length / 1024).toFixed(1)} KB, engine: ${engine}, voice: ${voice})`

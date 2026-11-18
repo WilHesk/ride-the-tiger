@@ -1,46 +1,67 @@
 /**
  * Automatic Article Narration (TTS MP3 Generator) for Ride The Tiger
- * - Default Voice: UK Female (`en-GB-SoniaNeural` / `en-GB`)
- * - Mode: Jumps straight into the body of the interview (skips headline/metadata)
- * - Uses pure Node.js (`node:https`, `node:crypto`, and `fetch`) so it runs in
- *   both Netlify Functions and local Astro dev/build without native binary dependencies.
+ *
+ * Supports 3 Narration Quality Tiers (automatically picks the highest tier available):
+ * 1. ElevenLabs Studio Narrator (`eleven_multilingual_v2`, UK Female "Alice" / "Charlotte")
+ *    — Used when `elevenLabsApiKey` (or `process.env.ELEVENLABS_API_KEY`) is provided.
+ * 2. OpenAI HD Neural Narrator (`gpt-4o-mini-tts` / `tts-1-hd`, UK Female editorial prompt)
+ *    — Used when `openAiApiKey` (or `process.env.OPENAI_API_KEY`) is provided.
+ * 3. Microsoft Edge Neural Read-Aloud (`en-GB-SoniaNeural` / `en-GB-LibbyNeural`)
+ *    — Free built-in neural voice with server-clock sync (`Sec-MS-GEC` + `muid`).
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs";
 import https from "node:https";
+import path from "node:path";
+
+function readLocalDotEnvKey(keyName) {
+  if (process.env[keyName]) return process.env[keyName];
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf-8");
+      const match = content.match(new RegExp(`^\\s*${keyName}\\s*=\\s*(.+)\\s*$`, "m"));
+      if (match) {
+        return match[1].trim().replace(/^['"]|['"]$/g, "");
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return "";
+}
 
 export const DEFAULT_TTS_VOICE = "en-GB-SoniaNeural";
 
 export const AVAILABLE_TTS_VOICES = [
   {
     id: "en-GB-SoniaNeural",
-    label: "UK Female — Sonia (Default Editorial)",
+    label: "UK Female — Sonia (BBC / Editorial Neural)",
     lang: "en-GB",
     tl: "en-GB",
+    elevenLabsVoiceId: "Xb7hH8MSUJpSbSDYk0k2", // Alice (British Female News/Editorial)
   },
   {
     id: "en-GB-LibbyNeural",
-    label: "UK Female — Libby (Warm Conversational)",
+    label: "UK Female — Libby (Warm Conversational Neural)",
     lang: "en-GB",
     tl: "en-GB",
+    elevenLabsVoiceId: "XB0fDUnXU5powFXDhCwa", // Charlotte (British Female Narrative)
   },
   {
     id: "en-GB-MaisieNeural",
-    label: "UK Female — Maisie (Bright)",
+    label: "UK Female — Dorothy / Maisie (Storyteller)",
     lang: "en-GB",
     tl: "en-GB",
+    elevenLabsVoiceId: "ThT5KcBeYPX3keUQqHPh", // Dorothy (British Female Storytelling)
   },
   {
     id: "en-GB-RyanNeural",
-    label: "UK Male — Ryan",
+    label: "UK Male — Ryan (Editorial Neural)",
     lang: "en-GB",
     tl: "en-GB",
-  },
-  {
-    id: "en-US-AvaNeural",
-    label: "US Female — Ava",
-    lang: "en-US",
-    tl: "en-US",
+    elevenLabsVoiceId: "JBFqnCBsd6RMkjVDRZzb", // George (British Male Narrative)
   },
 ];
 
@@ -56,7 +77,10 @@ export function cleanMarkdownForNarration(markdownBody) {
   text = text.replace(/^---\n[\s\S]*?\n---\n*/, "");
 
   // Remove inline image markers like [image: 50%] or [photo]
-  text = text.replace(/\[(?:image|photo|img)\s*(?:\d+)?\s*:?\s*(?:\d{1,3}%?)?\]/gi, "");
+  text = text.replace(
+    /\[(?:image|photo|img)\s*(?:\d+)?\s*:?\s*(?:\d{1,3}%?)?\]/gi,
+    ""
+  );
 
   // Replace Markdown links [label](url) with just label
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
@@ -78,13 +102,15 @@ export function cleanMarkdownForNarration(markdownBody) {
   text = text.replace(/\*\*([^*]+)\*\*/g, "$1");
   text = text.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1$2");
 
-  // Clean up parenthetical brackets like [I've had thoughts like] -> I've had thoughts like
+  // Clean up editorial square brackets like [I've had thoughts like] -> I've had thoughts like
   text = text.replace(/\[([^\]]+)\]/g, "$1");
 
-  // Normalize typography for smooth TTS pronunciation
+  // Normalize typography for smooth, natural pacing
   text = text
-    .replace(/\u2026/g, "...")
-    .replace(/[\u2014\u2013]/g, ", ")
+    .replace(/\bRTT\b/g, "Ride The Tiger")
+    .replace(/\u2026/g, "... ")
+    .replace(/\.\.\./g, "... ")
+    .replace(/[\u2014\u2013]/g, " — ")
     .replace(/\s+\n/g, "\n")
     .replace(/\n{2,}/g, "\n\n")
     .trim();
@@ -93,7 +119,7 @@ export function cleanMarkdownForNarration(markdownBody) {
 }
 
 /**
- * Splits cleaned article body text into natural sentence chunks under `maxChars`.
+ * Splits cleaned article body text into natural chunks under `maxChars`.
  */
 export function splitTextIntoSentenceChunks(text, maxChars = 185) {
   const paragraphs = String(text || "")
@@ -104,7 +130,6 @@ export function splitTextIntoSentenceChunks(text, maxChars = 185) {
   const chunks = [];
 
   for (const para of paragraphs) {
-    // Split on sentence boundaries (. ! ? followed by space or quote)
     const sentences = para
       .split(/(?<=[.!?]['"”’)]*)\s+/)
       .map((s) => s.trim())
@@ -117,7 +142,6 @@ export function splitTextIntoSentenceChunks(text, maxChars = 185) {
           chunks.push(current);
           current = "";
         }
-        // Further split long sentences on commas/semicolons or word boundaries
         const clauses = sentence
           .split(/(?<=[,;:])\s+/)
           .map((c) => c.trim())
@@ -162,12 +186,131 @@ export function splitTextIntoSentenceChunks(text, maxChars = 185) {
   return chunks;
 }
 
-const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
-const CHROMIUM_FULL_VERSION = "130.0.2849.68";
+// ============================================================================
+// TIER 1: ELEVENLABS STUDIO NARRATOR (Human-Grade British Female Narrator)
+// ============================================================================
+async function synthesizeElevenLabsMp3(
+  cleanedText,
+  voice = DEFAULT_TTS_VOICE,
+  apiKey = ""
+) {
+  const voiceMeta =
+    AVAILABLE_TTS_VOICES.find((v) => v.id === voice) || AVAILABLE_TTS_VOICES[0];
+  const elevenVoiceId = voiceMeta.elevenLabsVoiceId || "Xb7hH8MSUJpSbSDYk0k2"; // Alice (British Female)
 
-function generateSecMsGec() {
+  // ElevenLabs supports up to 4500 chars per request; chunk at ~3200 chars at paragraph boundaries
+  const chunks = splitTextIntoSentenceChunks(cleanedText, 3200);
+  const buffers = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const previousText = i > 0 ? chunks[i - 1].slice(-300) : undefined;
+    const nextText = i < chunks.length - 1 ? chunks[i + 1].slice(0, 300) : undefined;
+
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${elevenVoiceId}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": apiKey.trim(),
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: chunk,
+          model_id: "eleven_flash_v2_5",
+          ...(previousText ? { previous_text: previousText } : {}),
+          ...(nextText ? { next_text: nextText } : {}),
+          voice_settings: {
+            stability: 0.52,
+            similarity_boost: 0.78,
+            style: 0.22,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`ElevenLabs error (${res.status}): ${errText.slice(0, 120)}`);
+    }
+    const ab = await res.arrayBuffer();
+    buffers.push(Buffer.from(ab));
+  }
+
+  return Buffer.concat(buffers);
+}
+
+// ============================================================================
+// TIER 2: OPENAI STUDIO NARRATOR (`gpt-4o-mini-tts` / `tts-1-hd`)
+// ============================================================================
+async function synthesizeOpenAiMp3(cleanedText, apiKey = "") {
+  const chunks = splitTextIntoSentenceChunks(cleanedText, 3500);
+  const buffers = [];
+
+  for (const chunk of chunks) {
+    const res = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini-tts",
+        voice: "fable", // British-inflected warm storytelling voice
+        input: chunk,
+        instructions:
+          "Speak in a warm, natural, professional British female editorial journalist voice, like a BBC Radio 4 or Substack long-form magazine narrator. Maintain a conversational, engaging pace with natural pauses between quotes and paragraphs.",
+        response_format: "mp3",
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`OpenAI TTS error (${res.status}): ${errText.slice(0, 120)}`);
+    }
+    const ab = await res.arrayBuffer();
+    buffers.push(Buffer.from(ab));
+  }
+
+  return Buffer.concat(buffers);
+}
+
+// ============================================================================
+// TIER 3: MICROSOFT EDGE NEURAL TTS (`en-GB-SoniaNeural` / `en-GB-LibbyNeural`)
+// With automatic server-clock synchronization so clock skew never causes 403
+// ============================================================================
+const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
+const CHROMIUM_FULL_VERSION = "131.0.2903.112";
+const SEC_MS_GEC_VERSION = `1-${CHROMIUM_FULL_VERSION}`;
+
+let cachedClockOffsetMs = null;
+
+async function getServerSyncedUnixSeconds() {
+  if (cachedClockOffsetMs === null) {
+    try {
+      const res = await fetch("https://www.bing.com/", { method: "HEAD" });
+      const dateHeader = res.headers.get("date");
+      if (dateHeader) {
+        const serverMs = new Date(dateHeader).getTime();
+        if (!isNaN(serverMs)) {
+          cachedClockOffsetMs = serverMs - Date.now();
+        }
+      }
+    } catch {
+      // ignore
+    }
+    if (cachedClockOffsetMs === null) {
+      cachedClockOffsetMs = 0;
+    }
+  }
+  return Math.floor((Date.now() + cachedClockOffsetMs) / 1000);
+}
+
+function generateSecMsGecFromUnixSeconds(unixSeconds) {
   const WIN_EPOCH = 11644473600;
-  let ticks = Math.floor(Date.now() / 1000) + WIN_EPOCH;
+  let ticks = unixSeconds + WIN_EPOCH;
   ticks -= ticks % 300;
   const ticks100ns = BigInt(ticks) * 10000000n;
   const strToHash = `${ticks100ns.toString()}${TRUSTED_CLIENT_TOKEN}`;
@@ -187,7 +330,7 @@ function escapeXml(unsafe) {
     .replace(/'/g, "&apos;");
 }
 
-function createWsClientFrame(payloadString) {
+function createWsClientFrame(payloadString, opcode = 0x01) {
   const payload = Buffer.from(payloadString, "utf-8");
   const len = payload.length;
   let headerLen = 2;
@@ -196,7 +339,7 @@ function createWsClientFrame(payloadString) {
 
   const maskKey = crypto.randomBytes(4);
   const frame = Buffer.alloc(headerLen + 4 + len);
-  frame[0] = 0x81; // FIN + Text opcode
+  frame[0] = 0x80 | opcode;
 
   let offset = 2;
   if (len < 126) {
@@ -220,14 +363,18 @@ function createWsClientFrame(payloadString) {
   return frame;
 }
 
-/**
- * Synthesizes a single text chunk via Microsoft Edge Neural TTS WebSocket (`en-GB-SoniaNeural`).
- */
-function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 10000) {
+async function synthesizeEdgeChunk(
+  textChunk,
+  voice = DEFAULT_TTS_VOICE,
+  timeoutMs = 10000
+) {
+  const unixSeconds = await getServerSyncedUnixSeconds();
+  const gec = generateSecMsGecFromUnixSeconds(unixSeconds);
+  const connId = crypto.randomUUID().replace(/-/g, "");
+  const muid = crypto.randomBytes(16).toString("hex").toUpperCase();
+
   return new Promise((resolve, reject) => {
-    const connId = crypto.randomUUID().replace(/-/g, "");
-    const gec = generateSecMsGec();
-    const path = `/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${gec}&Sec-MS-GEC-Version=1-${CHROMIUM_FULL_VERSION}&ConnectionId=${connId}`;
+    const path = `/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}&Sec-MS-GEC=${gec}&Sec-MS-GEC-Version=${SEC_MS_GEC_VERSION}&ConnectionId=${connId}`;
 
     const wsKey = crypto.randomBytes(16).toString("base64");
     const req = https.request({
@@ -242,7 +389,8 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
         "Sec-WebSocket-Key": wsKey,
         "Sec-WebSocket-Version": "13",
         Origin: "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold",
-        "User-Agent": `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/${CHROMIUM_FULL_VERSION}`,
+        Cookie: `muid=${muid};`,
+        "User-Agent": `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/${CHROMIUM_FULL_VERSION}`,
       },
     });
 
@@ -268,7 +416,12 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
 
     req.on("error", (err) => finish(err));
     req.on("response", (res) => {
-      finish(new Error(`Edge TTS unexpected HTTP ${res.statusCode}`));
+      // If server returned a Date header on error, update cachedClockOffsetMs
+      if (res.headers?.date) {
+        const srvMs = new Date(res.headers.date).getTime();
+        if (!isNaN(srvMs)) cachedClockOffsetMs = srvMs - Date.now();
+      }
+      finish(new Error(`Edge TTS HTTP ${res.statusCode}`));
     });
 
     req.on("upgrade", (_res, socket, head) => {
@@ -277,7 +430,7 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
       }
 
       const configMsg =
-        `X-Timestamp:${new Date().toISOString()}\r\n` +
+        `X-Timestamp:${new Date().toString()}\r\n` +
         `Content-Type:application/json; charset=utf-8\r\n` +
         `Path:speech.config\r\n\r\n` +
         JSON.stringify({
@@ -300,13 +453,13 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
       const ssml =
         `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${xmlLang}'>` +
         `<voice name='${escapeXml(voice)}'>` +
-        `<prosody pitch='+0Hz' rate='+0%' volume='+0%'>${escapeXml(textChunk)}</prosody>` +
+        `<prosody pitch='-2Hz' rate='-3%' volume='+0%'>${escapeXml(textChunk)}</prosody>` +
         `</voice></speak>`;
 
       const ssmlMsg =
         `X-RequestId:${reqId}\r\n` +
         `Content-Type:application/ssml+xml\r\n` +
-        `X-Timestamp:${new Date().toISOString()}Z\r\n` +
+        `X-Timestamp:${new Date().toString()}Z\r\n` +
         `Path:ssml\r\n\r\n` +
         ssml;
 
@@ -341,7 +494,6 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
           rxBuffer = rxBuffer.subarray(offset + payloadLen);
 
           if (opcode === 0x01) {
-            // Text frame
             const textStr = frameData.toString("utf-8");
             if (textStr.includes("Path:turn.end")) {
               socket.end();
@@ -349,7 +501,6 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
               return;
             }
           } else if (opcode === 0x02) {
-            // Binary frame: first 2 bytes are header length (UInt16BE)
             if (frameData.length > 2) {
               const headerByteLen = frameData.readUInt16BE(0);
               const headerText = frameData
@@ -362,8 +513,10 @@ function synthesizeEdgeChunk(textChunk, voice = DEFAULT_TTS_VOICE, timeoutMs = 1
                 }
               }
             }
+          } else if (opcode === 0x09) {
+            // Ping -> send Pong
+            socket.write(createWsClientFrame(frameData.toString("utf-8"), 0x0a));
           } else if (opcode === 0x08) {
-            // Close frame
             socket.end();
             if (audioBuffers.length > 0) {
               finish(null, Buffer.concat(audioBuffers));
@@ -429,7 +582,8 @@ async function synthesizeGoogleUkMp3(cleanedText, tl = "en-GB") {
  */
 export async function generateArticleNarrationMp3(
   markdownBody,
-  voice = DEFAULT_TTS_VOICE
+  voice = DEFAULT_TTS_VOICE,
+  options = {}
 ) {
   const cleanedText = cleanMarkdownForNarration(markdownBody);
   if (!cleanedText) {
@@ -437,38 +591,80 @@ export async function generateArticleNarrationMp3(
   }
 
   const chosenVoice = voice || DEFAULT_TTS_VOICE;
+  const elevenLabsKey =
+    options?.elevenLabsApiKey || readLocalDotEnvKey("ELEVENLABS_API_KEY") || "";
+  const openAiKey =
+    options?.openAiApiKey || readLocalDotEnvKey("OPENAI_API_KEY") || "";
 
-  // 1. Fast HTTPS UK Female (`en-GB`) MP3 synthesizer (completes in ~2-3s, serverless-safe)
-  try {
-    const voiceMeta = AVAILABLE_TTS_VOICES.find((v) => v.id === chosenVoice);
-    const tl =
-      voiceMeta?.tl ||
-      (String(chosenVoice).startsWith("en-US") ? "en-US" : "en-GB");
-    const httpsBuffer = await synthesizeGoogleUkMp3(cleanedText, tl);
-    if (httpsBuffer && httpsBuffer.length > 1000) {
+  // Tier 1: ElevenLabs Studio Narrator (if API key provided)
+  if (elevenLabsKey.trim()) {
+    try {
+      const buf = await synthesizeElevenLabsMp3(
+        cleanedText,
+        chosenVoice,
+        elevenLabsKey
+      );
       return {
-        buffer: httpsBuffer,
-        engine: "uk-female-neural-https",
+        buffer: buf,
+        engine: "elevenlabs-studio",
+        voice: chosenVoice,
+      };
+    } catch (err) {
+      console.warn(
+        `[TTS] ElevenLabs studio warning (${err instanceof Error ? err.message : err}) — falling back to built-in voice.`
+      );
+    }
+  }
+
+  // Tier 2: OpenAI HD Studio Narrator (if API key provided)
+  if (openAiKey.trim()) {
+    try {
+      const buf = await synthesizeOpenAiMp3(cleanedText, openAiKey);
+      return {
+        buffer: buf,
+        engine: "openai-hd-studio",
+        voice: chosenVoice,
+      };
+    } catch (err) {
+      console.warn(
+        `[TTS] OpenAI TTS warning (${err instanceof Error ? err.message : err}) — falling back to built-in voice.`
+      );
+    }
+  }
+
+  // Tier 3: Microsoft Edge Neural Read-Aloud (`en-GB-SoniaNeural` / `en-GB-LibbyNeural`)
+  try {
+    const paragraphs = splitTextIntoSentenceChunks(cleanedText, 2000);
+    const edgeBuffers = [];
+    for (const paraChunk of paragraphs) {
+      const buf = await synthesizeEdgeChunk(paraChunk, chosenVoice, 10000);
+      if (!buf || buf.length < 256) {
+        throw new Error("Edge Neural TTS returned empty buffer");
+      }
+      edgeBuffers.push(buf);
+    }
+    const combined = Buffer.concat(edgeBuffers);
+    if (combined.length > 1000) {
+      return {
+        buffer: combined,
+        engine: "edge-neural-studio",
         voice: chosenVoice,
       };
     }
   } catch {
-    // Fall through to Edge WebSocket fallback
+    // Fall through to HTTPS fallback if Edge WebSocket is blocked
   }
 
-  // 2. Fallback to Edge Neural TTS WebSocket
-  const paragraphs = splitTextIntoSentenceChunks(cleanedText, 1800);
-  const edgeBuffers = [];
-  for (const paraChunk of paragraphs) {
-    const buf = await synthesizeEdgeChunk(paraChunk, chosenVoice, 3500);
-    if (!buf || buf.length < 256) {
-      throw new Error("TTS returned empty buffer");
-    }
-    edgeBuffers.push(buf);
-  }
+  // Tier 4: Fallback HTTPS UK Female (`en-GB`)
+  const voiceMeta = AVAILABLE_TTS_VOICES.find((v) => v.id === chosenVoice);
+  const tl =
+    voiceMeta?.tl ||
+    (String(chosenVoice).startsWith("en-US") ? "en-US" : "en-GB");
+  const httpsBuffer = await synthesizeGoogleUkMp3(cleanedText, tl);
+
   return {
-    buffer: Buffer.concat(edgeBuffers),
-    engine: "edge-neural",
+    buffer: httpsBuffer,
+    engine: "uk-female-https-fallback",
     voice: chosenVoice,
   };
 }

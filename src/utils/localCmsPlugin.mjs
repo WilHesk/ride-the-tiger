@@ -273,7 +273,11 @@ export function rttLocalCmsPlugin() {
               const safeAudioName = `${rawSlug}.mp3`;
               const { buffer, engine } = await generateArticleNarrationMp3(
                 payload.body,
-                voice
+                voice,
+                {
+                  elevenLabsApiKey: payload.elevenLabsApiKey || "",
+                  openAiApiKey: payload.openAiApiKey || "",
+                }
               );
               fs.writeFileSync(path.join(audioDir, safeAudioName), buffer);
               res.statusCode = 200;

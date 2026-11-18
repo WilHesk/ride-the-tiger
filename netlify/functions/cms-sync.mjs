@@ -201,9 +201,30 @@ export default async (req, context) => {
         );
         const safeAudioName = `${rawSlug}-narration.mp3`;
 
+        const savedTtsKeys =
+          (await store.get("state:tts-keys", {
+            type: "json",
+            consistency: "strong",
+          })) || {};
+        const elevenLabsApiKey =
+          payload.elevenLabsApiKey || savedTtsKeys.elevenLabsApiKey || "";
+        const openAiApiKey =
+          payload.openAiApiKey || savedTtsKeys.openAiApiKey || "";
+
+        if (payload.elevenLabsApiKey || payload.openAiApiKey) {
+          await store.setJSON("state:tts-keys", {
+            elevenLabsApiKey,
+            openAiApiKey,
+          });
+        }
+
         const { buffer, engine } = await generateArticleNarrationMp3(
           payload.body,
-          voice
+          voice,
+          {
+            elevenLabsApiKey,
+            openAiApiKey,
+          }
         );
         const arrayBuf = buffer.buffer.slice(
           buffer.byteOffset,
@@ -238,6 +259,11 @@ export default async (req, context) => {
 
         if (result?.interview?.body) {
           try {
+            const savedTtsKeys =
+              (await store.get("state:tts-keys", {
+                type: "json",
+                consistency: "strong",
+              })) || {};
             const voice = DEFAULT_TTS_VOICE;
             const rawSlug = sanitizeFilename(result.interview.slug || "interview").replace(
               /\.mp3$/i,
@@ -246,7 +272,13 @@ export default async (req, context) => {
             const safeAudioName = `${rawSlug}-narration.mp3`;
             const { buffer } = await generateArticleNarrationMp3(
               result.interview.body,
-              voice
+              voice,
+              {
+                elevenLabsApiKey:
+                  payload.elevenLabsApiKey || savedTtsKeys.elevenLabsApiKey || "",
+                openAiApiKey:
+                  payload.openAiApiKey || savedTtsKeys.openAiApiKey || "",
+              }
             );
             const arrayBuf = buffer.buffer.slice(
               buffer.byteOffset,
