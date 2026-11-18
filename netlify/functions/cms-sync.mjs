@@ -3,6 +3,10 @@ import {
   importFromGoogleDriveUrl,
   parseInterviewCopyAndAssets,
 } from "../../src/utils/gdriveImporter.mjs";
+import {
+  generateArticleNarrationMp3,
+  DEFAULT_TTS_VOICE,
+} from "../../src/utils/ttsGenerator.mjs";
 
 const STORE_NAME = "rtt-cms";
 
@@ -34,13 +38,43 @@ export default async (req, context) => {
     }
 
     const contentType =
-      (entry.metadata && entry.metadata.contentType) || "image/jpeg";
+      (entry.metadata && entry.metadata.contentType) ||
+      (safeName.endsWith(".mp3") ? "audio/mpeg" : "image/jpeg");
+
+    const bytes = new Uint8Array(entry.data);
+    const totalLength = bytes.byteLength;
+    const rangeHeader = req.headers.get("range");
+
+    if (rangeHeader && String(contentType).startsWith("audio/")) {
+      const m = rangeHeader.match(/bytes=(\d*)-(\d*)/);
+      if (m) {
+        const start = m[1] ? parseInt(m[1], 10) : 0;
+        const end = m[2] ? Math.min(totalLength - 1, parseInt(m[2], 10)) : totalLength - 1;
+        if (start >= 0 && start <= end && end < totalLength) {
+          const slice = bytes.slice(start, end + 1);
+          return new Response(slice, {
+            status: 206,
+            headers: {
+              "Content-Type": String(contentType),
+              "Content-Range": `bytes ${start}-${end}/${totalLength}`,
+              "Content-Length": String(slice.byteLength),
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "public, max-age=3600",
+            },
+          });
+        }
+      }
+    }
 
     return new Response(entry.data, {
       status: 200,
       headers: {
         "Content-Type": String(contentType),
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": String(totalLength),
+        "Accept-Ranges": "bytes",
+        "Cache-Control": safeName.endsWith(".mp3")
+          ? "public, max-age=3600"
+          : "public, max-age=31536000, immutable",
       },
     });
   }
@@ -136,11 +170,11 @@ export default async (req, context) => {
       ) {
         const safeName = sanitizeFilename(payload.filename);
         const match = String(payload.dataUrl).match(
-          /^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/
+          /^data:((?:image|audio)\/[a-zA-Z0-9+.-]+);base64,(.+)$/
         );
         if (!match) {
           return Response.json(
-            { ok: false, error: "Invalid image data URL" },
+            { ok: false, error: "Invalid image or audio data URL" },
             { status: 400 }
           );
         }
@@ -159,6 +193,35 @@ export default async (req, context) => {
         return Response.json({ ok: true, url: `/uploads/${safeName}` });
       }
 
+      if (payload.action === "generate-audio" && payload.body) {
+        const voice = payload.voice || DEFAULT_TTS_VOICE;
+        const rawSlug = sanitizeFilename(payload.slug || `interview-${Date.now()}`).replace(
+          /\.mp3$/i,
+          ""
+        );
+        const safeAudioName = `${rawSlug}-narration.mp3`;
+
+        const { buffer, engine } = await generateArticleNarrationMp3(
+          payload.body,
+          voice
+        );
+        const arrayBuf = buffer.buffer.slice(
+          buffer.byteOffset,
+          buffer.byteOffset + buffer.byteLength
+        );
+
+        await store.set(`upload:${safeAudioName}`, arrayBuf, {
+          metadata: { contentType: "audio/mpeg", filename: safeAudioName },
+        });
+
+        return Response.json({
+          ok: true,
+          audioUrl: `/uploads/${safeAudioName}`,
+          audioVoice: voice,
+          engine,
+        });
+      }
+
       if (payload.action === "import-gdrive-folder" && payload.folderUrl) {
         const saveImageToBlobs = async (filename, arrayBuffer, contentType) => {
           const safeName = sanitizeFilename(filename);
@@ -172,6 +235,33 @@ export default async (req, context) => {
           payload.folderUrl,
           saveImageToBlobs
         );
+
+        if (result?.interview?.body) {
+          try {
+            const voice = DEFAULT_TTS_VOICE;
+            const rawSlug = sanitizeFilename(result.interview.slug || "interview").replace(
+              /\.mp3$/i,
+              ""
+            );
+            const safeAudioName = `${rawSlug}-narration.mp3`;
+            const { buffer } = await generateArticleNarrationMp3(
+              result.interview.body,
+              voice
+            );
+            const arrayBuf = buffer.buffer.slice(
+              buffer.byteOffset,
+              buffer.byteOffset + buffer.byteLength
+            );
+            await store.set(`upload:${safeAudioName}`, arrayBuf, {
+              metadata: { contentType: "audio/mpeg", filename: safeAudioName },
+            });
+            result.interview.audioUrl = `/uploads/${safeAudioName}`;
+            result.interview.audioVoice = voice;
+          } catch {
+            // Audio can still be generated on demand or via browser Web Speech fallback
+          }
+        }
+
         return Response.json({
           ok: true,
           ...result,
@@ -186,6 +276,33 @@ export default async (req, context) => {
           images: Array.isArray(payload.images) ? payload.images : [],
           folderUrl: payload.folderUrl || "",
         });
+
+        if (interview?.body) {
+          try {
+            const voice = DEFAULT_TTS_VOICE;
+            const rawSlug = sanitizeFilename(interview.slug || "interview").replace(
+              /\.mp3$/i,
+              ""
+            );
+            const safeAudioName = `${rawSlug}-narration.mp3`;
+            const { buffer } = await generateArticleNarrationMp3(
+              interview.body,
+              voice
+            );
+            const arrayBuf = buffer.buffer.slice(
+              buffer.byteOffset,
+              buffer.byteOffset + buffer.byteLength
+            );
+            await store.set(`upload:${safeAudioName}`, arrayBuf, {
+              metadata: { contentType: "audio/mpeg", filename: safeAudioName },
+            });
+            interview.audioUrl = `/uploads/${safeAudioName}`;
+            interview.audioVoice = voice;
+          } catch {
+            // fallback
+          }
+        }
+
         return Response.json({ ok: true, interview });
       }
 

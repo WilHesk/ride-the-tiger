@@ -26,6 +26,8 @@ const interviewsCollection = defineCollection({
     order: z.number().optional(),
     inlineImages: z.array(inlineImageSchema).optional().default([]),
     googleDriveFolderUrl: z.string().optional(),
+    audioUrl: z.string().optional(),
+    audioVoice: z.string().optional(),
   })
 });
 

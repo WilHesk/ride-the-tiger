@@ -16,6 +16,7 @@ export async function getStaticPaths() {
 
 const { interview } = Astro.props;
 const imagePath = resolveInterviewImage(interview.data);
+const initialAudioUrl = interview.data.audioUrl || `/audio/${interview.id}.mp3`;
 const renderedArticleHtml = renderMarkdownWithInlineImages(
   interview.body || '',
   interview.data.inlineImages || []
@@ -169,8 +170,100 @@ const schema = {
       </div>
     </header>
 
-    <div class="bg-[var(--color-offwhite)] py-20 border-t border-gray-200">
+    <div class="bg-[var(--color-offwhite)] py-16 lg:py-20 border-t border-gray-200">
       <div class="container mx-auto px-6 max-w-3xl">
+        <!-- SUBSTACK-STYLE AUDIO NARRATION PLAYER -->
+        <div
+          id="rtt-audio-player-card"
+          class="mb-12 bg-[var(--color-charcoal)] text-[var(--color-offwhite)] border-b-4 border-tiger-500 p-5 sm:p-6 shadow-xl"
+        >
+          <audio
+            id="rtt-narration-audio"
+            preload="metadata"
+            src={initialAudioUrl}
+          ></audio>
+
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="inline-flex items-center justify-center w-6 h-6 bg-tiger-500 text-[var(--color-charcoal)]">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3.5 h-3.5" aria-hidden="true">
+                  <path d="M12 3a9 9 0 0 0-9 9v7c0 1.1.9 2 2 2h3v-8H5v-1a7 7 0 0 1 14 0v1h-3v8h3c1.1 0 2-.9 2-2v-7a9 9 0 0 0-9-9Z" />
+                </svg>
+              </span>
+              <div>
+                <p class="text-xs font-black uppercase tracking-widest text-tiger-500 m-0">
+                  Listen to This Interview
+                </p>
+                <p id="rtt-audio-subtitle" class="text-[11px] text-gray-300 m-0">
+                  Audio narration &middot; UK English &middot; Jumps straight into the interview
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                id="rtt-audio-back-15"
+                class="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-xs font-bold uppercase tracking-wider text-offwhite cursor-pointer transition-colors"
+                title="Rewind 15 seconds"
+              >
+                -15s
+              </button>
+              <button
+                type="button"
+                id="rtt-audio-fwd-15"
+                class="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-xs font-bold uppercase tracking-wider text-offwhite cursor-pointer transition-colors"
+                title="Fast-forward 15 seconds"
+              >
+                +15s
+              </button>
+              <button
+                type="button"
+                id="rtt-audio-speed-btn"
+                class="px-2.5 py-1 bg-tiger-500/20 hover:bg-tiger-500/30 border border-tiger-500/50 text-xs font-black uppercase tracking-wider text-tiger-500 cursor-pointer transition-colors min-w-[3.25rem]"
+                title="Change playback speed"
+              >
+                1&times;
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <button
+              type="button"
+              id="rtt-audio-play-btn"
+              aria-label="Play interview narration"
+              class="w-12 h-12 shrink-0 bg-tiger-500 hover:bg-tiger-600 text-[var(--color-charcoal)] flex items-center justify-center cursor-pointer transition-colors shadow-md"
+            >
+              <!-- Play Icon -->
+              <svg id="rtt-icon-play" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 ml-0.5">
+                <path d="M8 5.14v14l11-7-11-7Z" />
+              </svg>
+              <!-- Pause Icon -->
+              <svg id="rtt-icon-pause" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 hidden">
+                <path d="M6 19h4V5H6v14Zm8-14v14h4V5h-4Z" />
+              </svg>
+            </button>
+
+            <div class="flex-1 space-y-1.5">
+              <input
+                id="rtt-audio-seek"
+                type="range"
+                min="0"
+                max="1000"
+                step="1"
+                value="0"
+                aria-label="Seek audio position"
+                class="w-full accent-[var(--color-tiger-500)] cursor-pointer h-1.5 bg-gray-700"
+              />
+              <div class="flex items-center justify-between text-[11px] font-mono text-gray-300">
+                <span id="rtt-audio-current">0:00</span>
+                <span id="rtt-audio-duration">{interview.data.readTime.replace(/read/i, 'listen')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div
           id="interview-body-container"
           class="prose prose-lg prose-neutral max-w-none 
@@ -301,6 +394,14 @@ const schema = {
         );
       }
 
+      const audioEl = document.getElementById('rtt-narration-audio') as HTMLAudioElement | null;
+      if (audioEl) {
+        const expectedAudioUrl = post.audioUrl || `/audio/${post.slug}.mp3`;
+        if (audioEl.getAttribute('src') !== expectedAudioUrl && audioEl.paused) {
+          audioEl.setAttribute('src', expectedAudioUrl);
+        }
+      }
+
       // Related interviews hydration
       const relatedSection = document.getElementById('interview-related-section');
       const relatedGrid = document.getElementById('interview-related-grid');
@@ -372,6 +473,257 @@ const schema = {
       .catch(() => {});
   }
 
+  function initNarrationAudioPlayer() {
+    const audioEl = document.getElementById('rtt-narration-audio') as HTMLAudioElement | null;
+    const playBtn = document.getElementById('rtt-audio-play-btn') as HTMLButtonElement | null;
+    const iconPlay = document.getElementById('rtt-icon-play');
+    const iconPause = document.getElementById('rtt-icon-pause');
+    const seekInput = document.getElementById('rtt-audio-seek') as HTMLInputElement | null;
+    const currentEl = document.getElementById('rtt-audio-current');
+    const durationEl = document.getElementById('rtt-audio-duration');
+    const back15Btn = document.getElementById('rtt-audio-back-15');
+    const fwd15Btn = document.getElementById('rtt-audio-fwd-15');
+    const speedBtn = document.getElementById('rtt-audio-speed-btn');
+    const subtitleEl = document.getElementById('rtt-audio-subtitle');
+
+    if (!audioEl || !playBtn || playBtn.dataset.bound === 'true') return;
+    playBtn.dataset.bound = 'true';
+
+    const speeds = [1, 1.25, 1.5, 1.75, 2];
+    let speedIdx = 0;
+    let isSeeking = false;
+    let isGeneratingOnDemand = false;
+    let usingWebSpeechFallback = false;
+
+    function formatTime(sec: number): string {
+      if (!isFinite(sec) || sec < 0) return '0:00';
+      const total = Math.floor(sec);
+      const mins = Math.floor(total / 60);
+      const secs = total % 60;
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function setPlayingUi(playing: boolean) {
+      if (iconPlay && iconPause) {
+        iconPlay.classList.toggle('hidden', playing);
+        iconPause.classList.toggle('hidden', !playing);
+      }
+      playBtn?.setAttribute(
+        'aria-label',
+        playing ? 'Pause interview narration' : 'Play interview narration'
+      );
+    }
+
+    function startBrowserUkFemaleSpeechFallback() {
+      if (!('speechSynthesis' in window)) return;
+      const bodyEl = document.getElementById('interview-body-container');
+      const rawText = (bodyEl?.innerText || '').trim();
+      if (!rawText) return;
+
+      usingWebSpeechFallback = true;
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(rawText);
+      utterance.lang = 'en-GB';
+      utterance.rate = speeds[speedIdx];
+
+      const voices = window.speechSynthesis.getVoices();
+      const ukFemale =
+        voices.find(
+          (v) =>
+            /en[-_]GB/i.test(v.lang) &&
+            /sonia|libby|serena|kate|martha|female|hazel|susan/i.test(v.name)
+        ) ||
+        voices.find((v) => /en[-_]GB/i.test(v.lang)) ||
+        voices.find((v) => /^en/i.test(v.lang));
+
+      if (ukFemale) utterance.voice = ukFemale;
+
+      utterance.onstart = () => setPlayingUi(true);
+      utterance.onend = () => {
+        usingWebSpeechFallback = false;
+        setPlayingUi(false);
+      };
+      utterance.onerror = () => {
+        usingWebSpeechFallback = false;
+        setPlayingUi(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+      setPlayingUi(true);
+    }
+
+    async function ensureAudioOrGenerateAndPlay() {
+      if (isGeneratingOnDemand) return;
+
+      try {
+        await audioEl!.play();
+        setPlayingUi(true);
+        return;
+      } catch {
+        // If the MP3 does not exist yet (e.g. brand-new article created in browser), generate it on the fly
+      }
+
+      const bodyEl = document.getElementById('interview-body-container');
+      const bodyText = (bodyEl?.innerText || '').trim();
+      if (!bodyText) return;
+
+      const articleEl = document.getElementById('rtt-interview-article');
+      const slug =
+        decodeURIComponent(
+          window.location.pathname.replace(/^\/interviews\//, '').replace(/\/+$/, '')
+        ) ||
+        articleEl?.dataset.interviewSlug ||
+        'interview';
+
+      isGeneratingOnDemand = true;
+      if (subtitleEl) {
+        subtitleEl.textContent = 'Generating UK Female audio narration...';
+      }
+
+      try {
+        const res = await fetch('/__cms-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'generate-audio',
+            slug,
+            body: bodyText,
+            voice: 'en-GB-SoniaNeural',
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.audioUrl) {
+            audioEl!.src = json.audioUrl;
+            audioEl!.playbackRate = speeds[speedIdx];
+            if (subtitleEl) {
+              subtitleEl.textContent =
+                'Audio narration · UK English · Jumps straight into the interview';
+            }
+            await audioEl!.play();
+            setPlayingUi(true);
+            isGeneratingOnDemand = false;
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Web Speech UK female fallback
+      }
+
+      isGeneratingOnDemand = false;
+      if (subtitleEl) {
+        subtitleEl.textContent =
+          'Audio narration · UK English · Jumps straight into the interview';
+      }
+      startBrowserUkFemaleSpeechFallback();
+    }
+
+    playBtn.addEventListener('click', () => {
+      if (usingWebSpeechFallback && 'speechSynthesis' in window) {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause();
+          setPlayingUi(false);
+        } else if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+          setPlayingUi(true);
+        } else {
+          startBrowserUkFemaleSpeechFallback();
+        }
+        return;
+      }
+
+      if (audioEl.paused) {
+        ensureAudioOrGenerateAndPlay();
+      } else {
+        audioEl.pause();
+        setPlayingUi(false);
+      }
+    });
+
+    audioEl.addEventListener('play', () => {
+      setPlayingUi(true);
+      if ('mediaSession' in navigator) {
+        const title = document.getElementById('interview-title')?.textContent || 'Interview';
+        const interviewee = document.getElementById('interview-person')?.textContent || 'Ride The Tiger';
+        const heroImg = (document.getElementById('interview-hero-img') as HTMLImageElement | null)?.src;
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title,
+          artist: `${interviewee} — Ride The Tiger`,
+          album: 'Ride The Tiger Interviews',
+          artwork: heroImg ? [{ src: heroImg }] : [],
+        });
+      }
+    });
+
+    audioEl.addEventListener('pause', () => setPlayingUi(false));
+    audioEl.addEventListener('ended', () => {
+      setPlayingUi(false);
+      if (seekInput) seekInput.value = '0';
+      if (currentEl) currentEl.textContent = '0:00';
+    });
+
+    audioEl.addEventListener('loadedmetadata', () => {
+      if (durationEl && isFinite(audioEl.duration) && audioEl.duration > 0) {
+        durationEl.textContent = formatTime(audioEl.duration);
+      }
+    });
+
+    audioEl.addEventListener('timeupdate', () => {
+      if (currentEl) {
+        currentEl.textContent = formatTime(audioEl.currentTime);
+      }
+      if (
+        !isSeeking &&
+        seekInput &&
+        isFinite(audioEl.duration) &&
+        audioEl.duration > 0
+      ) {
+        seekInput.value = String(
+          Math.round((audioEl.currentTime / audioEl.duration) * 1000)
+        );
+      }
+    });
+
+    seekInput?.addEventListener('input', () => {
+      isSeeking = true;
+      if (isFinite(audioEl.duration) && audioEl.duration > 0 && currentEl) {
+        const targetTime = (Number(seekInput.value) / 1000) * audioEl.duration;
+        currentEl.textContent = formatTime(targetTime);
+      }
+    });
+
+    seekInput?.addEventListener('change', () => {
+      if (isFinite(audioEl.duration) && audioEl.duration > 0) {
+        audioEl.currentTime = (Number(seekInput.value) / 1000) * audioEl.duration;
+      }
+      isSeeking = false;
+    });
+
+    back15Btn?.addEventListener('click', () => {
+      if (isFinite(audioEl.duration)) {
+        audioEl.currentTime = Math.max(0, audioEl.currentTime - 15);
+      }
+    });
+
+    fwd15Btn?.addEventListener('click', () => {
+      if (isFinite(audioEl.duration)) {
+        audioEl.currentTime = Math.min(audioEl.duration, audioEl.currentTime + 15);
+      }
+    });
+
+    speedBtn?.addEventListener('click', () => {
+      speedIdx = (speedIdx + 1) % speeds.length;
+      const nextRate = speeds[speedIdx];
+      audioEl.playbackRate = nextRate;
+      speedBtn.innerHTML = `${nextRate}&times;`;
+    });
+  }
+
   initInterviewDetailHydration();
-  document.addEventListener('astro:page-load', initInterviewDetailHydration);
+  initNarrationAudioPlayer();
+  document.addEventListener('astro:page-load', () => {
+    initInterviewDetailHydration();
+    initNarrationAudioPlayer();
+  });
 </script>

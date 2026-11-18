@@ -8,6 +8,8 @@ readTime: "6 min read"
 excerpt: "Romey Norton shares her optimism for the future of the industry, takes us inside the female-founded Wordsmiths Unlimited... and talks about filming ghost stories with Kelsey Grammer."
 quote: "If you smash the machines, you starve. If you rely on them completely, your voice disappears."
 tags: ["Copywriting", "Agency Life", "Workflow"]
+audioUrl: "/audio/romey-norton.mp3"
+audioVoice: "en-GB-SoniaNeural"
 ---
 
 Welcome to Ride The Tiger, a brand-new series asking copywriters how they’re adapting to the new world of AI.

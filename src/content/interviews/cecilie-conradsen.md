@@ -8,6 +8,8 @@ readTime: "7 min read"
 excerpt: "Cecilie Conradsen has written it all. Now she sits down with Ride The Tiger to discuss how she’s adapting to AI, and her questions about LinkedIn's algorithm."
 quote: "You’re putting a lot of effort into showing your human side but it just feels like the algorithm is a bit against you."
 tags: ["Copywriting", "LinkedIn", "Brand Development"]
+audioUrl: "/audio/cecilie-conradsen.mp3"
+audioVoice: "en-GB-SoniaNeural"
 ---
 
 This freelance superstar has written it all. Healthcare, skincare, petcare… even fish-farming (yep, really). Now she sits down with Ride The Tiger, our new series asking creative professionals how they’re adapting to the world of AI.

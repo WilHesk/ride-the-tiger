@@ -8,6 +8,8 @@ readTime: "5 min read"
 excerpt: "Punchy copy is Martin Sayers' calling card. Is AI cramping his style? Not a bit of it. Actually work is better than ever."
 quote: "People won’t put up with this slop anymore."
 tags: ["Copywriting", "AI Ethics", "Business Strategy"]
+audioUrl: "/audio/martin-sayers.mp3"
+audioVoice: "en-GB-SoniaNeural"
 ---
 
 Punchy copy is [Martin Sayers](https://www.linkedin.com/in/martinsayers/)' calling card. That’s why he’s smashed big gigs with brands like Unilever and built a successful mentoring package for copywriters, The 10% Blueprint.

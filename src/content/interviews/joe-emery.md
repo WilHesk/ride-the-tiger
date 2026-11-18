@@ -8,6 +8,8 @@ readTime: "8 min read"
 excerpt: "After five redundancies in five years, Joe Emery is about to cross the world for a new life. He’s beaten the platform by proving that vulnerability works."
 quote: "Pretending everything's amazing, believing all this rubbish about needing to be more positive… that’s quite damaging."
 tags: ["Mental Health", "LinkedIn", "Career Survival"]
+audioUrl: "/audio/joe-emery.mp3"
+audioVoice: "en-GB-SoniaNeural"
 ---
 
 He’s the unemployed influencer whose cry for help went viral. Now after five redundancies in five years, after a battle with self-harm, panic attacks and suicidal thoughts, Joe Emery is about to cross the world for a new life.

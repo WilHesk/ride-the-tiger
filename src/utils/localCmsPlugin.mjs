@@ -4,6 +4,10 @@ import {
   importFromGoogleDriveUrl,
   parseInterviewCopyAndAssets,
 } from "./gdriveImporter.mjs";
+import {
+  generateArticleNarrationMp3,
+  DEFAULT_TTS_VOICE,
+} from "./ttsGenerator.mjs";
 
 function sanitizeFilename(raw) {
   return String(raw || "image.jpg")
@@ -52,6 +56,12 @@ function serializeInterviewToMarkdown(item) {
   }
   if (item.googleDriveFolderUrl) {
     lines.push(`googleDriveFolderUrl: "${esc(item.googleDriveFolderUrl)}"`);
+  }
+  if (item.audioUrl) {
+    lines.push(`audioUrl: "${esc(item.audioUrl)}"`);
+  }
+  if (item.audioVoice) {
+    lines.push(`audioVoice: "${esc(item.audioVoice)}"`);
   }
   if (inlineImages.length > 0) {
     lines.push("inlineImages:");
@@ -231,13 +241,13 @@ export function rttLocalCmsPlugin() {
               ensureUploadsDir();
               const safeName = sanitizeFilename(payload.filename);
               const match = String(payload.dataUrl).match(
-                /^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/
+                /^data:((?:image|audio)\/[a-zA-Z0-9+.-]+);base64,(.+)$/
               );
               if (!match) {
                 res.statusCode = 400;
                 res.setHeader("Content-Type", "application/json");
                 res.end(
-                  JSON.stringify({ ok: false, error: "Invalid image data URL" })
+                  JSON.stringify({ ok: false, error: "Invalid image or audio data URL" })
                 );
                 return;
               }
@@ -247,6 +257,34 @@ export function rttLocalCmsPlugin() {
               res.setHeader("Content-Type", "application/json");
               res.end(
                 JSON.stringify({ ok: true, url: `/uploads/${safeName}` })
+              );
+              return;
+            }
+
+            if (payload.action === "generate-audio" && payload.body) {
+              const audioDir = path.join(rootDir, "public", "audio");
+              if (!fs.existsSync(audioDir)) {
+                fs.mkdirSync(audioDir, { recursive: true });
+              }
+              const voice = payload.voice || DEFAULT_TTS_VOICE;
+              const rawSlug = sanitizeFilename(
+                payload.slug || `interview-${Date.now()}`
+              ).replace(/\.mp3$/i, "");
+              const safeAudioName = `${rawSlug}.mp3`;
+              const { buffer, engine } = await generateArticleNarrationMp3(
+                payload.body,
+                voice
+              );
+              fs.writeFileSync(path.join(audioDir, safeAudioName), buffer);
+              res.statusCode = 200;
+              res.setHeader("Content-Type", "application/json");
+              res.end(
+                JSON.stringify({
+                  ok: true,
+                  audioUrl: `/audio/${safeAudioName}`,
+                  audioVoice: voice,
+                  engine,
+                })
               );
               return;
             }
@@ -267,6 +305,30 @@ export function rttLocalCmsPlugin() {
                 payload.folderUrl,
                 saveLocalImage
               );
+
+              if (result?.interview?.body) {
+                try {
+                  const audioDir = path.join(rootDir, "public", "audio");
+                  if (!fs.existsSync(audioDir)) {
+                    fs.mkdirSync(audioDir, { recursive: true });
+                  }
+                  const voice = DEFAULT_TTS_VOICE;
+                  const rawSlug = sanitizeFilename(
+                    result.interview.slug || "interview"
+                  ).replace(/\.mp3$/i, "");
+                  const safeAudioName = `${rawSlug}.mp3`;
+                  const { buffer } = await generateArticleNarrationMp3(
+                    result.interview.body,
+                    voice
+                  );
+                  fs.writeFileSync(path.join(audioDir, safeAudioName), buffer);
+                  result.interview.audioUrl = `/audio/${safeAudioName}`;
+                  result.interview.audioVoice = voice;
+                } catch {
+                  // fallback
+                }
+              }
+
               res.statusCode = 200;
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ ok: true, ...result }));
@@ -281,6 +343,30 @@ export function rttLocalCmsPlugin() {
                 images: Array.isArray(payload.images) ? payload.images : [],
                 folderUrl: payload.folderUrl || "",
               });
+
+              if (interview?.body) {
+                try {
+                  const audioDir = path.join(rootDir, "public", "audio");
+                  if (!fs.existsSync(audioDir)) {
+                    fs.mkdirSync(audioDir, { recursive: true });
+                  }
+                  const voice = DEFAULT_TTS_VOICE;
+                  const rawSlug = sanitizeFilename(
+                    interview.slug || "interview"
+                  ).replace(/\.mp3$/i, "");
+                  const safeAudioName = `${rawSlug}.mp3`;
+                  const { buffer } = await generateArticleNarrationMp3(
+                    interview.body,
+                    voice
+                  );
+                  fs.writeFileSync(path.join(audioDir, safeAudioName), buffer);
+                  interview.audioUrl = `/audio/${safeAudioName}`;
+                  interview.audioVoice = voice;
+                } catch {
+                  // fallback
+                }
+              }
+
               res.statusCode = 200;
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ ok: true, interview }));
